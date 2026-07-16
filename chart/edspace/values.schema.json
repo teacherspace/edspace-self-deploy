@@ -1,0 +1,1303 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "Hand-maintained structural half of the chart schema. gen.py merges in env/envSecret validation from contract.yaml and writes chart/edspace/values.schema.json.",
+  "type": "object",
+  "properties": {
+    "app": {
+      "type": "object",
+      "properties": {
+        "host": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Public hostname (PHX_HOST). Required."
+        },
+        "checkOrigin": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "host"
+      ]
+    },
+    "image": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tag": {
+          "type": "string"
+        },
+        "pullPolicy": {
+          "enum": [
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ]
+        }
+      }
+    },
+    "imagePullSecrets": {
+      "type": "array"
+    },
+    "registryCredentials": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "registry": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        }
+      },
+      "if": {
+        "properties": {
+          "enabled": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "username": {
+            "minLength": 1
+          },
+          "password": {
+            "minLength": 1
+          }
+        },
+        "required": [
+          "username",
+          "password"
+        ]
+      }
+    },
+    "replicaCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "db": {
+      "type": "object",
+      "properties": {
+        "bundled": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "image": {
+              "type": "string"
+            },
+            "database": {
+              "type": "string"
+            },
+            "username": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "persistence": {
+              "type": "object",
+              "properties": {
+                "size": {
+                  "type": "string"
+                },
+                "storageClass": {
+                  "type": "string"
+                }
+              }
+            },
+            "resources": {
+              "type": "object"
+            }
+          }
+        },
+        "host": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "database": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "password": {
+          "type": "string"
+        },
+        "sslMode": {
+          "type": "string"
+        },
+        "existingSecret": {
+          "type": "string"
+        },
+        "existingSecretKeys": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "properties": {
+        "autoGenerate": {
+          "type": "boolean"
+        },
+        "secretKeyBase": {
+          "type": "string"
+        },
+        "tokenSigningSecret": {
+          "type": "string"
+        },
+        "releaseCookie": {
+          "type": "string"
+        },
+        "existingSecret": {
+          "type": "string"
+        },
+        "existingSecretKeys": {
+          "type": "object",
+          "properties": {
+            "secretKeyBase": {
+              "type": "string"
+            },
+            "tokenSigningSecret": {
+              "type": "string"
+            },
+            "releaseCookie": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "properties": {
+        "adapter": {
+          "enum": [
+            "local_disk",
+            "azure_blob"
+          ]
+        },
+        "localDisk": {
+          "type": "object",
+          "properties": {
+            "root": {
+              "type": "string"
+            },
+            "persistence": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "size": {
+                  "type": "string"
+                },
+                "storageClass": {
+                  "type": "string"
+                },
+                "accessModes": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "existingClaim": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "azureBlob": {
+          "type": "object",
+          "properties": {
+            "account": {
+              "type": "string"
+            },
+            "container": {
+              "type": "string"
+            },
+            "key": {
+              "type": "string"
+            },
+            "existingSecret": {
+              "type": "string"
+            },
+            "existingSecretKey": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "adapter": {
+                "const": "azure_blob"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "azureBlob": {
+                "properties": {
+                  "account": {
+                    "minLength": 1
+                  },
+                  "container": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "account",
+                  "container"
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "llm": {
+      "type": "object",
+      "properties": {
+        "provider": {
+          "type": "string"
+        },
+        "apiKey": {
+          "type": "string"
+        },
+        "existingSecret": {
+          "type": "string"
+        },
+        "existingSecretKey": {
+          "type": "string"
+        },
+        "baseUrl": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "textModel": {
+          "type": "string"
+        },
+        "textDeployment": {
+          "type": "string"
+        },
+        "smallModel": {
+          "type": "string"
+        },
+        "smallDeployment": {
+          "type": "string"
+        },
+        "embeddingModel": {
+          "type": "string"
+        },
+        "embeddingDeployment": {
+          "type": "string"
+        }
+      }
+    },
+    "mailer": {
+      "type": "object",
+      "properties": {
+        "fromEmail": {
+          "type": "string"
+        },
+        "fromName": {
+          "type": "string"
+        },
+        "mailpaceApiKey": {
+          "type": "string"
+        },
+        "existingSecret": {
+          "type": "string"
+        },
+        "existingSecretKey": {
+          "type": "string"
+        }
+      }
+    },
+    "extraEnvFrom": {
+      "type": "array"
+    },
+    "extraEnv": {
+      "type": "array"
+    },
+    "service": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "className": {
+          "type": "string"
+        },
+        "annotations": {
+          "type": "object"
+        },
+        "host": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "pathType": {
+          "type": "string"
+        },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "secretName": {
+              "type": "string"
+            },
+            "certManager": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                },
+                "issuer": {
+                  "type": "string"
+                },
+                "issuerKind": {
+                  "enum": [
+                    "Issuer",
+                    "ClusterIssuer"
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "resources": {
+      "type": "object"
+    },
+    "probes": {
+      "type": "object"
+    },
+    "clustering": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "lifecycle": {
+      "type": "object",
+      "properties": {
+        "terminationGracePeriodSeconds": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "strategy": {
+      "type": "object"
+    },
+    "migrate": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "backoffLimit": {
+          "type": "integer"
+        },
+        "activeDeadlineSeconds": {
+          "type": "integer"
+        },
+        "resources": {
+          "type": "object"
+        }
+      }
+    },
+    "seed": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "activeDeadlineSeconds": {
+          "type": "integer"
+        },
+        "resources": {
+          "type": "object"
+        }
+      }
+    },
+    "autoscaling": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "minReplicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxReplicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "targetCPUUtilizationPercentage": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "targetMemoryUtilizationPercentage": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "behavior": {
+          "type": "object"
+        }
+      }
+    },
+    "pdb": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "minAvailable": {
+          "type": [
+            "integer",
+            "string"
+          ]
+        }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "properties": {
+        "create": {
+          "type": "boolean"
+        },
+        "annotations": {
+          "type": "object"
+        },
+        "name": {
+          "type": "string"
+        },
+        "automount": {
+          "type": "boolean"
+        }
+      }
+    },
+    "podAnnotations": {
+      "type": "object"
+    },
+    "podLabels": {
+      "type": "object"
+    },
+    "podSecurityContext": {
+      "type": "object"
+    },
+    "containerSecurityContext": {
+      "type": "object"
+    },
+    "nodeSelector": {
+      "type": "object"
+    },
+    "tolerations": {
+      "type": "array"
+    },
+    "affinity": {
+      "type": "object"
+    },
+    "priorityClassName": {
+      "type": "string"
+    },
+    "clusterDomain": {
+      "type": "string"
+    },
+    "nameOverride": {
+      "type": "string"
+    },
+    "fullnameOverride": {
+      "type": "string"
+    },
+    "env": {
+      "type": "object",
+      "description": "Extra non-secret environment variables (rendered into the app ConfigMap).",
+      "properties": {
+        "PHX_HOST": {
+          "type": "string",
+          "description": "Public hostname the app is served on. Drives generated URLs and the default WebSocket origin check."
+        },
+        "SECRET_KEY_BASE": {
+          "not": {},
+          "description": "SECRET_KEY_BASE is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "TOKEN_SIGNING_SECRET": {
+          "not": {},
+          "description": "TOKEN_SIGNING_SECRET is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "PHX_CHECK_ORIGIN": {
+          "type": "string",
+          "description": "WebSocket origin check. Unset, the app allows \"//\" + PHX_HOST. Set to a comma-separated list of origins, or \"false\" to disable (not recommended)."
+        },
+        "ECTO_IPV6": {
+          "type": [
+            "boolean",
+            "string"
+          ],
+          "description": "Set to \"true\" to connect to Postgres over IPv6."
+        },
+        "POOL_SIZE": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Ecto connections per pool. Effective connections per node = POOL_SIZE x POOL_COUNT (default 30x2 = 60). Keep replicas x POOL_SIZE x POOL_COUNT below Postgres max_connections."
+        },
+        "POOL_COUNT": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Number of Ecto pools per node (see POOL_SIZE)."
+        },
+        "DB_QUEUE_TARGET_MS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "DBConnection queue_target \u2014 checkout queue latency target."
+        },
+        "DB_QUEUE_INTERVAL_MS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "DBConnection queue_interval for backpressure measurement."
+        },
+        "DB_TIMEOUT_MS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "DBConnection checkout timeout."
+        },
+        "EDSPACE_FILE_STORAGE_ADAPTER": {
+          "type": "string",
+          "enum": [
+            "local_disk",
+            "azure_blob"
+          ],
+          "description": "Attachment storage backend. \"local_disk\" stores under EDSPACE_FILE_STORAGE_ROOT (needs a persistent volume); \"azure_blob\" requires AZURE_STORAGE_ACCOUNT/CONTAINER/KEY \u2014 if any of the three is missing the app silently falls back to local disk."
+        },
+        "EDSPACE_FILE_STORAGE_ROOT": {
+          "type": "string",
+          "description": "Root directory for the local_disk adapter."
+        },
+        "AZURE_STORAGE_ACCOUNT": {
+          "type": "string",
+          "description": "Azure Blob storage account name (azure_blob adapter)."
+        },
+        "AZURE_STORAGE_CONTAINER": {
+          "type": "string",
+          "description": "Azure Blob container for uploads (must already exist)."
+        },
+        "AZURE_STORAGE_KEY": {
+          "not": {},
+          "description": "AZURE_STORAGE_KEY is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "EDSPACE_LLM_PROVIDER": {
+          "type": "string",
+          "enum": [
+            "azure",
+            "openai",
+            "anthropic",
+            "google",
+            "groq",
+            "mistral",
+            "openrouter",
+            "deepseek",
+            "deepinfra",
+            "cerebras",
+            "xai",
+            "amazon_bedrock"
+          ],
+          "description": "LLM provider used for chat, generation and embeddings."
+        },
+        "EDSPACE_LLM_API_KEY": {
+          "not": {},
+          "description": "EDSPACE_LLM_API_KEY is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "EDSPACE_LLM_BASE_URL": {
+          "type": "string",
+          "description": "Provider base URL. Required for azure (your Azure OpenAI / AI Foundry endpoint); usually left empty for public providers."
+        },
+        "EDSPACE_LLM_API_VERSION": {
+          "type": "string",
+          "description": "Azure OpenAI API version, when the provider is azure."
+        },
+        "EDSPACE_LLM_TEXT_MODEL": {
+          "type": "string",
+          "description": "Main text model, \"provider:model\" form."
+        },
+        "EDSPACE_LLM_TEXT_DEPLOYMENT": {
+          "type": "string",
+          "description": "Azure deployment name serving the main text model (azure only)."
+        },
+        "EDSPACE_LLM_SMALL_MODEL": {
+          "type": "string",
+          "description": "Small/fast model for lightweight tasks, \"provider:model\" form."
+        },
+        "EDSPACE_LLM_SMALL_DEPLOYMENT": {
+          "type": "string",
+          "description": "Azure deployment name serving the small model (azure only)."
+        },
+        "EDSPACE_LLM_EMBEDDING_MODEL": {
+          "type": "string",
+          "description": "Embedding model for retrieval/RAG, \"provider:model\" form. Must produce 1536-dimension vectors (database schema is fixed to 1536)."
+        },
+        "EDSPACE_LLM_EMBEDDING_DEPLOYMENT": {
+          "type": "string",
+          "description": "Azure deployment name serving the embedding model (azure only)."
+        },
+        "AZURE_OPENAI_API_KEY": {
+          "not": {},
+          "description": "AZURE_OPENAI_API_KEY is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "AZURE_OPENAI_BASE_URL": {
+          "type": "string",
+          "description": "Fallback alias for EDSPACE_LLM_BASE_URL (azure provider)."
+        },
+        "AZURE_API_KEY": {
+          "not": {},
+          "description": "AZURE_API_KEY is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "AZURE_BASE_URL": {
+          "type": "string",
+          "description": "Second fallback alias for EDSPACE_LLM_BASE_URL."
+        },
+        "REQ_LLM_POOL_SIZE": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Finch pool size for streamed LLM calls."
+        },
+        "REQ_LLM_POOL_COUNT": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Finch pool count for streamed LLM calls."
+        },
+        "REQ_LLM_STRUCTURED_POOL_SIZE": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Finch pool size for structured (sync) LLM calls."
+        },
+        "REQ_LLM_STRUCTURED_POOL_COUNT": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Finch pool count for structured (sync) LLM calls."
+        },
+        "REQ_LLM_BULK_POOL_SIZE": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Finch pool size for bulk embedding calls."
+        },
+        "REQ_LLM_BULK_POOL_COUNT": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Finch pool count for bulk embedding calls."
+        },
+        "MAX_CONCURRENT_STREAMS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Per-node cap on in-flight chat turns."
+        },
+        "MAX_CONCURRENT_CREATION_SESSIONS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Per-node cap on concurrent assistant-builder sessions."
+        },
+        "MAX_CONCURRENT_BACKGROUND_TASKS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Per-node cap on post-turn background tasks."
+        },
+        "HISTORY_MESSAGE_WINDOW": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Maximum stored messages hydrated per chat turn."
+        },
+        "EDSPACE_CHAT_MAX_TOTAL_CACHED_CHARS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Ceiling on cached retrieval characters per conversation."
+        },
+        "EDSPACE_CHAT_MAX_HISTORY_CHARS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Ceiling on history characters hydrated per turn."
+        },
+        "EDSPACE_SPEECH_ENABLED": {
+          "type": [
+            "boolean",
+            "string"
+          ],
+          "description": "Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; set to \"false\" when no Azure Speech resource is available."
+        },
+        "AZURE_SPEECH_KEY": {
+          "not": {},
+          "description": "AZURE_SPEECH_KEY is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "AZURE_SPEECH_REGION": {
+          "type": "string",
+          "description": "Azure Speech resource region."
+        },
+        "AZURE_SPEECH_ENDPOINT": {
+          "type": "string",
+          "description": "Azure Speech endpoint override."
+        },
+        "EDSPACE_SPEECH_RECOGNITION_LANGUAGE": {
+          "type": "string",
+          "description": "Primary speech-to-text language."
+        },
+        "EDSPACE_SPEECH_RECOGNITION_LANGUAGES": {
+          "type": "string",
+          "description": "Comma-separated set of languages offered for speech-to-text."
+        },
+        "EDSPACE_SPEECH_VOICE": {
+          "type": "string",
+          "description": "Default text-to-speech voice."
+        },
+        "MAILER_FROM_EMAIL": {
+          "type": "string",
+          "description": "From address for transactional email. Must be a sender verified in your MailPace account."
+        },
+        "MAILER_FROM_NAME": {
+          "type": "string",
+          "description": "From display name for transactional email."
+        },
+        "MAILPACE_API_KEY": {
+          "not": {},
+          "description": "MAILPACE_API_KEY is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "UNILOGIN_CLIENT_ID": {
+          "type": "string",
+          "description": "UniLogin (Danish school SSO) OIDC client id. Leave empty to disable UniLogin sign-in."
+        },
+        "UNILOGIN_CLIENT_SECRET": {
+          "not": {},
+          "description": "UNILOGIN_CLIENT_SECRET is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "UNILOGIN_REDIRECT_URI": {
+          "type": "string",
+          "description": "UniLogin OIDC redirect URI (https://<PHX_HOST>/auth/unilogin/callback)."
+        },
+        "UNILOGIN_BASE_URL": {
+          "type": "string",
+          "description": "UniLogin broker base URL."
+        },
+        "UNILOGIN_ID_CLAIM": {
+          "type": "string",
+          "description": "OIDC claim carrying the UniLogin user id."
+        },
+        "UNILOGIN_ROLE_CLAIM": {
+          "type": "string",
+          "description": "OIDC claim carrying the UniLogin role."
+        },
+        "MICROSOFT_TENANT_ID": {
+          "type": "string",
+          "description": "Microsoft Entra ID tenant (\"common\" allows any tenant)."
+        },
+        "MICROSOFT_CLIENT_ID": {
+          "type": "string",
+          "description": "Microsoft Entra ID application (client) id. Leave empty to disable Microsoft sign-in."
+        },
+        "MICROSOFT_CLIENT_SECRET": {
+          "not": {},
+          "description": "MICROSOFT_CLIENT_SECRET is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "MICROSOFT_REDIRECT_URI": {
+          "type": "string",
+          "description": "Microsoft OIDC redirect URI (https://<PHX_HOST>/auth/microsoft/callback)."
+        },
+        "MICROSOFT_BASE_URL": {
+          "type": "string",
+          "description": "Microsoft identity platform base URL override."
+        },
+        "PRAXIS_CLIENT_ID": {
+          "type": "string",
+          "description": "Praxis/Egmont OIDC client id (PKCE public client)."
+        },
+        "PRAXIS_REDIRECT_URI": {
+          "type": "string",
+          "description": "Praxis OIDC redirect URI."
+        },
+        "PRAXIS_BASE_URL": {
+          "type": "string",
+          "description": "Praxis OIDC base URL."
+        },
+        "PRAXIS_LICENSE_SERVICE_URL": {
+          "type": "string",
+          "description": "Praxis license service endpoint."
+        },
+        "PRAXIS_LICENSE_API_KEY": {
+          "not": {},
+          "description": "PRAXIS_LICENSE_API_KEY is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "PRAXIS_PRODUCT_URL": {
+          "type": "string",
+          "description": "Praxis product URL used in license redirects."
+        },
+        "DEBUG_AUTH_FAILURES": {
+          "type": [
+            "boolean",
+            "string"
+          ],
+          "description": "Set to \"true\" to log detailed SSO failure reasons. WARNING - logs may then contain personal data; enable only while troubleshooting."
+        },
+        "PDF_ENABLED": {
+          "type": [
+            "boolean",
+            "string"
+          ],
+          "description": "Enables the headless-Chromium PDF export subsystem. The packaging layer forces \"false\" in migration/seed jobs."
+        },
+        "CHROMIC_PDF_POOL_SIZE": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Concurrent Chromium sessions for PDF rendering. Each session costs memory; lower it on small instances."
+        },
+        "CHROMIC_PDF_TIMEOUT_MS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "PDF render operation timeout."
+        },
+        "CHROMIC_PDF_INIT_TIMEOUT_MS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Chromium cold-start timeout."
+        },
+        "CHROMIC_PDF_CHROME_EXECUTABLE": {
+          "type": "string",
+          "description": "Path override for the Chromium binary."
+        },
+        "LANGFUSE_PUBLIC_KEY": {
+          "type": "string",
+          "description": "Langfuse public key. LLM tracing activates only when LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY and LANGFUSE_HOST are all set; leave empty to disable tracing."
+        },
+        "LANGFUSE_SECRET_KEY": {
+          "not": {},
+          "description": "LANGFUSE_SECRET_KEY is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "LANGFUSE_HOST": {
+          "type": "string",
+          "description": "Langfuse host receiving OpenTelemetry traces (your own Langfuse instance)."
+        },
+        "LANGFUSE_BASE_URL": {
+          "type": "string",
+          "description": "Langfuse REST API base URL; defaults to LANGFUSE_HOST."
+        },
+        "LANGFUSE_BASEURL": {
+          "type": "string",
+          "description": "Legacy alias of LANGFUSE_BASE_URL."
+        },
+        "LANGFUSE_ENVIRONMENT": {
+          "type": "string",
+          "description": "deployment.environment tag on emitted traces."
+        },
+        "LANGFUSE_RELEASE": {
+          "type": "string",
+          "description": "service.version tag on emitted traces."
+        },
+        "LANGFUSE_TIMEOUT": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Langfuse REST client timeout (ms)."
+        },
+        "EDSPACE_OTEL_LLM_PAYLOADS": {
+          "type": "string",
+          "description": "Whether prompt/completion text is included in telemetry spans. Set to \"none\" to strip payloads (recommended when traces leave your infrastructure)."
+        },
+        "OTEL_BSP_MAX_QUEUE_SIZE": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "OpenTelemetry batch span processor queue size."
+        },
+        "OTEL_BSP_SCHEDULE_DELAY_MS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "OpenTelemetry batch span processor flush interval."
+        },
+        "OTEL_BSP_EXPORT_TIMEOUT_MS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "OpenTelemetry batch span processor export timeout."
+        },
+        "LINEAR_API_KEY": {
+          "not": {},
+          "description": "LINEAR_API_KEY is a secret - set it under envSecret (or the matching structured value) instead."
+        },
+        "LINEAR_BASE_URL": {
+          "type": "string",
+          "description": "Linear GraphQL endpoint."
+        },
+        "LINEAR_FEEDBACK_TEAM_ID": {
+          "type": "string",
+          "description": "Linear team receiving feedback issues."
+        },
+        "LINEAR_INTERNAL_CUSTOMER_ID": {
+          "type": "string",
+          "description": "Linear customer id attached to feedback issues."
+        },
+        "LINEAR_LABEL_BUG": {
+          "type": "string",
+          "description": "Linear label id applied to bug feedback."
+        },
+        "LINEAR_LABEL_IDEA": {
+          "type": "string",
+          "description": "Linear label id applied to idea feedback."
+        },
+        "LINEAR_LABEL_OTHER": {
+          "type": "string",
+          "description": "Linear label id applied to other feedback."
+        },
+        "SOCKET_DRAINER_BATCH_SIZE": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "WebSockets disconnected per batch during graceful shutdown."
+        },
+        "SOCKET_DRAINER_BATCH_INTERVAL_MS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Interval between socket-drain batches."
+        },
+        "SOCKET_DRAINER_SHUTDOWN_MS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Total socket-drain budget on shutdown. The chart's terminationGracePeriodSeconds must exceed this (default 45s vs 30s)."
+        },
+        "ULIMIT_NOFILE": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "Soft file-descriptor limit the release requests at boot. The orchestrator must grant a hard limit at least this high (compose sets ulimits; modern Kubernetes runtimes default higher)."
+        },
+        "ERL_FLAGS": {
+          "type": "string",
+          "description": "Extra BEAM VM flags appended at boot."
+        },
+        "ERL_MAX_PORTS": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "BEAM +Q \u2014 maximum ports (sockets/files)."
+        },
+        "ERL_MAX_PROCESSES": {
+          "type": [
+            "integer",
+            "string"
+          ],
+          "description": "BEAM +P \u2014 maximum Erlang processes."
+        },
+        "DISCARD_ASSISTANT_DRAFTS": {
+          "type": [
+            "boolean",
+            "string"
+          ],
+          "description": "One-shot flag consumed by the 2026-05 assistant-lifecycle migration."
+        }
+      },
+      "additionalProperties": {
+        "type": [
+          "string",
+          "integer",
+          "boolean"
+        ]
+      }
+    },
+    "envSecret": {
+      "type": "object",
+      "description": "Extra secret environment variables (rendered into the app Secret).",
+      "properties": {
+        "SECRET_KEY_BASE": {
+          "type": "string",
+          "description": "Random string (64+ chars) used to sign/encrypt cookies and session data. Generate with scripts/generate-secrets.sh. Changing it invalidates all active sessions."
+        },
+        "TOKEN_SIGNING_SECRET": {
+          "type": "string",
+          "description": "Random string used to sign authentication tokens. Generate with scripts/generate-secrets.sh. Changing it invalidates issued tokens."
+        },
+        "AZURE_STORAGE_KEY": {
+          "type": "string",
+          "description": "Azure Blob storage account access key (azure_blob adapter)."
+        },
+        "EDSPACE_LLM_API_KEY": {
+          "type": "string",
+          "description": "API key for the configured LLM provider. Effectively required \u2014 the product's core features depend on it. (The Azure-style fallbacks AZURE_OPENAI_API_KEY / AZURE_API_KEY are also honoured.)"
+        },
+        "AZURE_OPENAI_API_KEY": {
+          "type": "string",
+          "description": "Fallback alias for EDSPACE_LLM_API_KEY (azure provider)."
+        },
+        "AZURE_API_KEY": {
+          "type": "string",
+          "description": "Second fallback alias for EDSPACE_LLM_API_KEY."
+        },
+        "AZURE_SPEECH_KEY": {
+          "type": "string",
+          "description": "Azure Cognitive Services Speech API key."
+        },
+        "MAILPACE_API_KEY": {
+          "type": "string",
+          "description": "MailPace API token. Required \u2014 the app refuses to boot in production without it. MailPace is currently the only supported email provider (see docs/limitations.md)."
+        },
+        "UNILOGIN_CLIENT_SECRET": {
+          "type": "string",
+          "description": "UniLogin OIDC client secret."
+        },
+        "MICROSOFT_CLIENT_SECRET": {
+          "type": "string",
+          "description": "Microsoft Entra ID client secret."
+        },
+        "PRAXIS_LICENSE_API_KEY": {
+          "type": "string",
+          "description": "Praxis license service API key."
+        },
+        "LANGFUSE_SECRET_KEY": {
+          "type": "string",
+          "description": "Langfuse secret key."
+        },
+        "LINEAR_API_KEY": {
+          "type": "string",
+          "description": "Linear API key for the in-app feedback integration. Leave empty to disable (feedback is then not forwarded anywhere)."
+        }
+      },
+      "additionalProperties": {
+        "type": [
+          "string",
+          "integer",
+          "boolean"
+        ]
+      }
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "External DB requires connection details unless bundled PG is on.",
+      "if": {
+        "properties": {
+          "db": {
+            "properties": {
+              "bundled": {
+                "properties": {
+                  "enabled": {
+                    "const": false
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "db": {
+            "anyOf": [
+              {
+                "properties": {
+                  "host": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "host"
+                ]
+              },
+              {
+                "properties": {
+                  "existingSecret": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "existingSecret"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "$comment": "Explicit secrets are mandatory when auto-generation is off.",
+      "if": {
+        "properties": {
+          "secrets": {
+            "properties": {
+              "autoGenerate": {
+                "const": false
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "secrets": {
+            "anyOf": [
+              {
+                "properties": {
+                  "secretKeyBase": {
+                    "minLength": 1
+                  },
+                  "tokenSigningSecret": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "secretKeyBase",
+                  "tokenSigningSecret"
+                ]
+              },
+              {
+                "properties": {
+                  "existingSecret": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "existingSecret"
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "$comment": "RWO local-disk persistence cannot roll multiple replicas.",
+      "if": {
+        "properties": {
+          "replicaCount": {
+            "minimum": 2
+          },
+          "storage": {
+            "properties": {
+              "adapter": {
+                "const": "local_disk"
+              },
+              "localDisk": {
+                "properties": {
+                  "persistence": {
+                    "properties": {
+                      "enabled": {
+                        "const": true
+                      },
+                      "accessModes": {
+                        "contains": {
+                          "const": "ReadWriteOnce"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "replicaCount"
+        ]
+      },
+      "then": {
+        "$comment": "Fail: use azure_blob, an RWX storage class, or replicaCount 1.",
+        "not": {}
+      }
+    }
+  ]
+}

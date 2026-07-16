@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  codegen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Generated files are current
+        run: uv run scripts/gen.py --check
+
+  chart:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint against every ci values file
+        run: |
+          for f in chart/edspace/ci/*.yaml; do
+            helm lint chart/edspace -f "$f"
+          done
+      - name: Render and validate manifests
+        run: |
+          go install github.com/yannh/kubeconform/cmd/kubeconform@latest
+          for f in chart/edspace/ci/*.yaml; do
+            helm template edspace chart/edspace -f "$f" \
+              | ~/go/bin/kubeconform -strict -ignore-missing-schemas -summary
+          done
+      - name: Chart README is current (helm-docs)
+        run: |
+          go install github.com/norwoodj/helm-docs/cmd/helm-docs@latest
+          ~/go/bin/helm-docs --chart-search-root chart --validate
+
+  compose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compose file is valid
+        run: |
+          cp compose/.env.example compose/.env
+          echo "POSTGRES_PASSWORD=ci-dummy" >> compose/.env
+          docker compose -f compose/compose.yaml --project-directory compose config -q
+
+  bicep:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build managed-app template
+        run: |
+          az bicep install
+          cd marketplace/azure/managed-app && ./build.sh --no-zip
+
+  scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y shellcheck
+          shellcheck scripts/*.sh marketplace/azure/managed-app/*.sh \
+            marketplace/azure/managed-app/test/*.sh marketplace/azure/update-train/scripts/*.sh

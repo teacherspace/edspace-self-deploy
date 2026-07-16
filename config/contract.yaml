@@ -1,0 +1,1214 @@
+# EdSpace environment-variable contract.
+#
+# Single source of truth for every environment variable the app reads.
+# Generated surfaces (run `make gen` after editing):
+#   - compose/.env.example
+#   - chart/edspace/values.schema.json (env/envSecret passthrough validation)
+#   - docs/env-vars.md
+#
+# Field reference:
+#   type:     string | integer | boolean | enum   (wire format is always a string)
+#   required: bool, or {chart: bool, compose: bool} for per-context requiredness
+#   secret:   true -> must live in a Secret / PasswordBox, never a ConfigMap or plain env
+#   default:  scalar (app compiled-in), or {app:, chart:, compose:} when packaging overrides
+#   tier:     core     -> shown uncommented in .env.example; primary docs
+#             advanced -> commented out in .env.example; documented
+#             internal -> tuning/plumbing; excluded from customer surfaces (still settable)
+#   source:   user     -> customer provides or accepts default
+#             computed -> derived by the packaging layer (chart/compose/managed app)
+#             fixed    -> pinned by the packaging layer / image
+#
+# Provenance: config/runtime.exs, lib/edspace/repo/pool_config.ex,
+# lib/edspace_web/endpoint.ex, rel/env.sh.eex, Dockerfile of the app repo.
+
+version: 1
+
+categories:
+  - id: phoenix
+    title: Core Phoenix / HTTP
+  - id: database
+    title: Database
+  - id: storage
+    title: File storage
+  - id: llm
+    title: LLM provider
+  - id: llm-pools
+    title: LLM connection pools
+  - id: chat-limits
+    title: Chat limits & admission control
+  - id: speech
+    title: Speech (Azure Cognitive Services)
+  - id: mailer
+    title: Mailer
+  - id: auth
+    title: Authentication / OIDC
+  - id: pdf
+    title: PDF export
+  - id: telemetry
+    title: Telemetry (Langfuse / OpenTelemetry)
+  - id: linear
+    title: Linear feedback integration
+  - id: lifecycle
+    title: Shutdown & socket draining
+  - id: beam
+    title: BEAM / OS tuning
+  - id: deploy
+    title: Deployment settings (not read by the app)
+
+vars:
+  # ---------------------------------------------------------------- phoenix
+  - name: PHX_HOST
+    category: phoenix
+    description: >-
+      Public hostname the app is served on. Drives generated URLs and the
+      default WebSocket origin check.
+    type: string
+    required: true
+    secret: false
+    tier: core
+    source: user
+    example: edspace.school.example
+
+  - name: SECRET_KEY_BASE
+    category: phoenix
+    description: >-
+      Random string (64+ chars) used to sign/encrypt cookies and session
+      data. Generate with scripts/generate-secrets.sh. Changing it
+      invalidates all active sessions.
+    type: string
+    required: true
+    secret: true
+    tier: core
+    source: user
+
+  - name: TOKEN_SIGNING_SECRET
+    category: phoenix
+    description: >-
+      Random string used to sign authentication tokens. Generate with
+      scripts/generate-secrets.sh. Changing it invalidates issued tokens.
+    type: string
+    required: true
+    secret: true
+    tier: core
+    source: user
+
+  - name: PHX_CHECK_ORIGIN
+    category: phoenix
+    description: >-
+      WebSocket origin check. Unset, the app allows "//" + PHX_HOST. Set to
+      a comma-separated list of origins, or "false" to disable (not
+      recommended).
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+    example: https://edspace.school.example,https://alias.school.example
+
+  - name: PHX_SERVER
+    category: phoenix
+    description: Starts the HTTP server under a mix release. Set by the image.
+    type: boolean
+    default: { app: false, chart: true, compose: true }
+    required: false
+    secret: false
+    tier: internal
+    source: fixed
+
+  - name: PORT
+    category: phoenix
+    description: HTTP listen port inside the container.
+    type: integer
+    default: { app: 4000, chart: 4000, compose: 4000 }
+    required: false
+    secret: false
+    tier: internal
+    source: fixed
+
+  - name: DNS_CLUSTER_QUERY
+    category: phoenix
+    description: >-
+      DNS name polled by dns_cluster to discover peer nodes. Set
+      automatically by the Helm chart (headless service) when clustering is
+      enabled. Required whenever more than one replica runs, otherwise
+      LiveView/PubSub events stay node-local.
+    type: string
+    required: false
+    secret: false
+    tier: internal
+    source: computed
+
+  # --------------------------------------------------------------- database
+  - name: DATABASE_URL
+    category: database
+    description: >-
+      Ecto connection URL, ecto://USER:PASS@HOST:PORT/DB. Composed
+      automatically by the chart/compose/managed app from structured
+      database settings; do not set directly.
+    type: string
+    required: true
+    secret: true
+    tier: core
+    source: computed
+
+  - name: ECTO_IPV6
+    category: database
+    description: Set to "true" to connect to Postgres over IPv6.
+    type: boolean
+    default: { app: false }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: POOL_SIZE
+    category: database
+    description: >-
+      Ecto connections per pool. Effective connections per node =
+      POOL_SIZE x POOL_COUNT (default 30x2 = 60). Keep
+      replicas x POOL_SIZE x POOL_COUNT below Postgres max_connections.
+    type: integer
+    default: { app: 30 }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: POOL_COUNT
+    category: database
+    description: Number of Ecto pools per node (see POOL_SIZE).
+    type: integer
+    default: { app: 2 }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: DB_QUEUE_TARGET_MS
+    category: database
+    description: DBConnection queue_target — checkout queue latency target.
+    type: integer
+    default: { app: 50 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: DB_QUEUE_INTERVAL_MS
+    category: database
+    description: DBConnection queue_interval for backpressure measurement.
+    type: integer
+    default: { app: 1000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: DB_TIMEOUT_MS
+    category: database
+    description: DBConnection checkout timeout.
+    type: integer
+    default: { app: 15000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  # ---------------------------------------------------------------- storage
+  - name: EDSPACE_FILE_STORAGE_ADAPTER
+    category: storage
+    description: >-
+      Attachment storage backend. "local_disk" stores under
+      EDSPACE_FILE_STORAGE_ROOT (needs a persistent volume); "azure_blob"
+      requires AZURE_STORAGE_ACCOUNT/CONTAINER/KEY — if any of the three is
+      missing the app silently falls back to local disk.
+    type: enum
+    enum: [local_disk, azure_blob]
+    default: { app: local_disk, compose: local_disk }
+    required: false
+    secret: false
+    tier: core
+    source: user
+
+  - name: EDSPACE_FILE_STORAGE_ROOT
+    category: storage
+    description: Root directory for the local_disk adapter.
+    type: string
+    default: { app: priv/uploads, chart: /app/uploads, compose: /app/uploads }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: AZURE_STORAGE_ACCOUNT
+    category: storage
+    description: Azure Blob storage account name (azure_blob adapter).
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+    example: stoedspaceprod
+
+  - name: AZURE_STORAGE_CONTAINER
+    category: storage
+    description: Azure Blob container for uploads (must already exist).
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+    example: uploads
+
+  - name: AZURE_STORAGE_KEY
+    category: storage
+    description: Azure Blob storage account access key (azure_blob adapter).
+    type: string
+    required: false
+    secret: true
+    tier: core
+    source: user
+
+  # -------------------------------------------------------------------- llm
+  - name: EDSPACE_LLM_PROVIDER
+    category: llm
+    description: LLM provider used for chat, generation and embeddings.
+    type: enum
+    enum: [azure, openai, anthropic, google, groq, mistral, openrouter, deepseek, deepinfra, cerebras, xai, amazon_bedrock]
+    default: { app: azure }
+    required: false
+    secret: false
+    tier: core
+    source: user
+
+  - name: EDSPACE_LLM_API_KEY
+    category: llm
+    description: >-
+      API key for the configured LLM provider. Effectively required — the
+      product's core features depend on it. (The Azure-style fallbacks
+      AZURE_OPENAI_API_KEY / AZURE_API_KEY are also honoured.)
+    type: string
+    required: true
+    secret: true
+    tier: core
+    source: user
+
+  - name: EDSPACE_LLM_BASE_URL
+    category: llm
+    description: >-
+      Provider base URL. Required for azure (your Azure OpenAI / AI Foundry
+      endpoint); usually left empty for public providers.
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+    example: https://aif-edspace-prod.cognitiveservices.azure.com/
+
+  - name: EDSPACE_LLM_API_VERSION
+    category: llm
+    description: Azure OpenAI API version, when the provider is azure.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+    example: "2024-10-21"
+
+  - name: EDSPACE_LLM_TEXT_MODEL
+    category: llm
+    description: Main text model, "provider:model" form.
+    type: string
+    default: { app: "azure:gpt-5.4" }
+    required: false
+    secret: false
+    tier: core
+    source: user
+
+  - name: EDSPACE_LLM_TEXT_DEPLOYMENT
+    category: llm
+    description: Azure deployment name serving the main text model (azure only).
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+    example: gpt-5.4
+
+  - name: EDSPACE_LLM_SMALL_MODEL
+    category: llm
+    description: Small/fast model for lightweight tasks, "provider:model" form.
+    type: string
+    default: { app: "azure:gpt-5-mini" }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: EDSPACE_LLM_SMALL_DEPLOYMENT
+    category: llm
+    description: Azure deployment name serving the small model (azure only).
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+    example: gpt-5-mini
+
+  - name: EDSPACE_LLM_EMBEDDING_MODEL
+    category: llm
+    description: >-
+      Embedding model for retrieval/RAG, "provider:model" form. Must produce
+      1536-dimension vectors (database schema is fixed to 1536).
+    type: string
+    default: { app: "azure:text-embedding-3-small" }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: EDSPACE_LLM_EMBEDDING_DEPLOYMENT
+    category: llm
+    description: Azure deployment name serving the embedding model (azure only).
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+    example: text-embedding-3-small
+
+  - name: AZURE_OPENAI_API_KEY
+    category: llm
+    description: Fallback alias for EDSPACE_LLM_API_KEY (azure provider).
+    type: string
+    required: false
+    secret: true
+    tier: advanced
+    source: user
+    notes: Prefer EDSPACE_LLM_API_KEY; this alias exists for Azure-conventional setups.
+
+  - name: AZURE_OPENAI_BASE_URL
+    category: llm
+    description: Fallback alias for EDSPACE_LLM_BASE_URL (azure provider).
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+    notes: Prefer EDSPACE_LLM_BASE_URL.
+
+  - name: AZURE_API_KEY
+    category: llm
+    description: Second fallback alias for EDSPACE_LLM_API_KEY.
+    type: string
+    required: false
+    secret: true
+    tier: internal
+    source: user
+
+  - name: AZURE_BASE_URL
+    category: llm
+    description: Second fallback alias for EDSPACE_LLM_BASE_URL.
+    type: string
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  # -------------------------------------------------------------- llm-pools
+  - name: REQ_LLM_POOL_SIZE
+    category: llm-pools
+    description: Finch pool size for streamed LLM calls.
+    type: integer
+    default: { app: 50 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: REQ_LLM_POOL_COUNT
+    category: llm-pools
+    description: Finch pool count for streamed LLM calls.
+    type: integer
+    default: { app: 8 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: REQ_LLM_STRUCTURED_POOL_SIZE
+    category: llm-pools
+    description: Finch pool size for structured (sync) LLM calls.
+    type: integer
+    default: { app: 20 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: REQ_LLM_STRUCTURED_POOL_COUNT
+    category: llm-pools
+    description: Finch pool count for structured (sync) LLM calls.
+    type: integer
+    default: { app: 4 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: REQ_LLM_BULK_POOL_SIZE
+    category: llm-pools
+    description: Finch pool size for bulk embedding calls.
+    type: integer
+    default: { app: 20 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: REQ_LLM_BULK_POOL_COUNT
+    category: llm-pools
+    description: Finch pool count for bulk embedding calls.
+    type: integer
+    default: { app: 5 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  # ------------------------------------------------------------ chat-limits
+  - name: MAX_CONCURRENT_STREAMS
+    category: chat-limits
+    description: Per-node cap on in-flight chat turns.
+    type: integer
+    default: { app: 2000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: MAX_CONCURRENT_CREATION_SESSIONS
+    category: chat-limits
+    description: Per-node cap on concurrent assistant-builder sessions.
+    type: integer
+    default: { app: 1000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: MAX_CONCURRENT_BACKGROUND_TASKS
+    category: chat-limits
+    description: Per-node cap on post-turn background tasks.
+    type: integer
+    default: { app: 1000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: HISTORY_MESSAGE_WINDOW
+    category: chat-limits
+    description: Maximum stored messages hydrated per chat turn.
+    type: integer
+    default: { app: 500 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: EDSPACE_CHAT_MAX_TOTAL_CACHED_CHARS
+    category: chat-limits
+    description: Ceiling on cached retrieval characters per conversation.
+    type: integer
+    default: { app: 400000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: EDSPACE_CHAT_MAX_HISTORY_CHARS
+    category: chat-limits
+    description: Ceiling on history characters hydrated per turn.
+    type: integer
+    default: { app: 1200000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  # ----------------------------------------------------------------- speech
+  - name: EDSPACE_SPEECH_ENABLED
+    category: speech
+    description: >-
+      Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings
+      when enabled; set to "false" when no Azure Speech resource is available.
+    type: boolean
+    default: { app: true }
+    required: false
+    secret: false
+    tier: core
+    source: user
+
+  - name: AZURE_SPEECH_KEY
+    category: speech
+    description: Azure Cognitive Services Speech API key.
+    type: string
+    required: false
+    secret: true
+    tier: core
+    source: user
+
+  - name: AZURE_SPEECH_REGION
+    category: speech
+    description: Azure Speech resource region.
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+    example: swedencentral
+
+  - name: AZURE_SPEECH_ENDPOINT
+    category: speech
+    description: Azure Speech endpoint override.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: EDSPACE_SPEECH_RECOGNITION_LANGUAGE
+    category: speech
+    description: Primary speech-to-text language.
+    type: string
+    default: { app: da-DK }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: EDSPACE_SPEECH_RECOGNITION_LANGUAGES
+    category: speech
+    description: Comma-separated set of languages offered for speech-to-text.
+    type: string
+    default: { app: "da-DK,en-US,de-DE,fr-FR,es-ES,it-IT" }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: EDSPACE_SPEECH_VOICE
+    category: speech
+    description: Default text-to-speech voice.
+    type: string
+    default: { app: da-DK-ChristelNeural }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  # ----------------------------------------------------------------- mailer
+  - name: MAILER_FROM_EMAIL
+    category: mailer
+    description: >-
+      From address for transactional email. Must be a sender verified in
+      your MailPace account.
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+    example: noreply@school.example
+
+  - name: MAILER_FROM_NAME
+    category: mailer
+    description: From display name for transactional email.
+    type: string
+    default: { app: EdSpace }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: MAILPACE_API_KEY
+    category: mailer
+    description: >-
+      MailPace API token. Required — the app refuses to boot in production
+      without it. MailPace is currently the only supported email provider
+      (see docs/limitations.md).
+    type: string
+    required: true
+    secret: true
+    tier: core
+    source: user
+
+  # ------------------------------------------------------------------- auth
+  - name: UNILOGIN_CLIENT_ID
+    category: auth
+    description: UniLogin (Danish school SSO) OIDC client id. Leave empty to disable UniLogin sign-in.
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+
+  - name: UNILOGIN_CLIENT_SECRET
+    category: auth
+    description: UniLogin OIDC client secret.
+    type: string
+    required: false
+    secret: true
+    tier: core
+    source: user
+
+  - name: UNILOGIN_REDIRECT_URI
+    category: auth
+    description: UniLogin OIDC redirect URI (https://<PHX_HOST>/auth/unilogin/callback).
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+
+  - name: UNILOGIN_BASE_URL
+    category: auth
+    description: UniLogin broker base URL.
+    type: string
+    default: { app: "https://et-broker.unilogin.dk/auth/realms/broker" }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: UNILOGIN_ID_CLAIM
+    category: auth
+    description: OIDC claim carrying the UniLogin user id.
+    type: string
+    default: { app: uniid }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: UNILOGIN_ROLE_CLAIM
+    category: auth
+    description: OIDC claim carrying the UniLogin role.
+    type: string
+    default: { app: uniLoginRolle }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: MICROSOFT_TENANT_ID
+    category: auth
+    description: Microsoft Entra ID tenant ("common" allows any tenant).
+    type: string
+    default: { app: common }
+    required: false
+    secret: false
+    tier: core
+    source: user
+
+  - name: MICROSOFT_CLIENT_ID
+    category: auth
+    description: Microsoft Entra ID application (client) id. Leave empty to disable Microsoft sign-in.
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+
+  - name: MICROSOFT_CLIENT_SECRET
+    category: auth
+    description: Microsoft Entra ID client secret.
+    type: string
+    required: false
+    secret: true
+    tier: core
+    source: user
+
+  - name: MICROSOFT_REDIRECT_URI
+    category: auth
+    description: Microsoft OIDC redirect URI (https://<PHX_HOST>/auth/microsoft/callback).
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+
+  - name: MICROSOFT_BASE_URL
+    category: auth
+    description: Microsoft identity platform base URL override.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: PRAXIS_CLIENT_ID
+    category: auth
+    description: Praxis/Egmont OIDC client id (PKCE public client).
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: PRAXIS_REDIRECT_URI
+    category: auth
+    description: Praxis OIDC redirect URI.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: PRAXIS_BASE_URL
+    category: auth
+    description: Praxis OIDC base URL.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: PRAXIS_LICENSE_SERVICE_URL
+    category: auth
+    description: Praxis license service endpoint.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: PRAXIS_LICENSE_API_KEY
+    category: auth
+    description: Praxis license service API key.
+    type: string
+    required: false
+    secret: true
+    tier: advanced
+    source: user
+
+  - name: PRAXIS_PRODUCT_URL
+    category: auth
+    description: Praxis product URL used in license redirects.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: DEBUG_AUTH_FAILURES
+    category: auth
+    description: >-
+      Set to "true" to log detailed SSO failure reasons. WARNING - logs may
+      then contain personal data; enable only while troubleshooting.
+    type: boolean
+    default: { app: false }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  # -------------------------------------------------------------------- pdf
+  - name: PDF_ENABLED
+    category: pdf
+    description: >-
+      Enables the headless-Chromium PDF export subsystem. The packaging
+      layer forces "false" in migration/seed jobs.
+    type: boolean
+    default: { app: true }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: CHROMIC_PDF_POOL_SIZE
+    category: pdf
+    description: Concurrent Chromium sessions for PDF rendering. Each session costs memory; lower it on small instances.
+    type: integer
+    default: { app: 4 }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: CHROMIC_PDF_TIMEOUT_MS
+    category: pdf
+    description: PDF render operation timeout.
+    type: integer
+    default: { app: 30000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: CHROMIC_PDF_INIT_TIMEOUT_MS
+    category: pdf
+    description: Chromium cold-start timeout.
+    type: integer
+    default: { app: 30000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: CHROMIC_PDF_CHROME_EXECUTABLE
+    category: pdf
+    description: Path override for the Chromium binary.
+    type: string
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  # -------------------------------------------------------------- telemetry
+  - name: LANGFUSE_PUBLIC_KEY
+    category: telemetry
+    description: >-
+      Langfuse public key. LLM tracing activates only when
+      LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY and LANGFUSE_HOST are all set;
+      leave empty to disable tracing.
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+
+  - name: LANGFUSE_SECRET_KEY
+    category: telemetry
+    description: Langfuse secret key.
+    type: string
+    required: false
+    secret: true
+    tier: core
+    source: user
+
+  - name: LANGFUSE_HOST
+    category: telemetry
+    description: Langfuse host receiving OpenTelemetry traces (your own Langfuse instance).
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+    example: https://langfuse.school.example
+
+  - name: LANGFUSE_BASE_URL
+    category: telemetry
+    description: Langfuse REST API base URL; defaults to LANGFUSE_HOST.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: LANGFUSE_BASEURL
+    category: telemetry
+    description: Legacy alias of LANGFUSE_BASE_URL.
+    type: string
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: LANGFUSE_ENVIRONMENT
+    category: telemetry
+    description: deployment.environment tag on emitted traces.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+    example: production
+
+  - name: LANGFUSE_RELEASE
+    category: telemetry
+    description: service.version tag on emitted traces.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: LANGFUSE_TIMEOUT
+    category: telemetry
+    description: Langfuse REST client timeout (ms).
+    type: integer
+    default: { app: 5000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: EDSPACE_OTEL_LLM_PAYLOADS
+    category: telemetry
+    description: >-
+      Whether prompt/completion text is included in telemetry spans. Set to
+      "none" to strip payloads (recommended when traces leave your
+      infrastructure).
+    type: string
+    default: { app: raw }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: OTEL_BSP_MAX_QUEUE_SIZE
+    category: telemetry
+    description: OpenTelemetry batch span processor queue size.
+    type: integer
+    default: { app: 16384 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: OTEL_BSP_SCHEDULE_DELAY_MS
+    category: telemetry
+    description: OpenTelemetry batch span processor flush interval.
+    type: integer
+    default: { app: 2000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: OTEL_BSP_EXPORT_TIMEOUT_MS
+    category: telemetry
+    description: OpenTelemetry batch span processor export timeout.
+    type: integer
+    default: { app: 30000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  # ----------------------------------------------------------------- linear
+  - name: LINEAR_API_KEY
+    category: linear
+    description: >-
+      Linear API key for the in-app feedback integration. Leave empty to
+      disable (feedback is then not forwarded anywhere).
+    type: string
+    required: false
+    secret: true
+    tier: advanced
+    source: user
+
+  - name: LINEAR_BASE_URL
+    category: linear
+    description: Linear GraphQL endpoint.
+    type: string
+    default: { app: "https://api.linear.app/graphql" }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: LINEAR_FEEDBACK_TEAM_ID
+    category: linear
+    description: Linear team receiving feedback issues.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: LINEAR_INTERNAL_CUSTOMER_ID
+    category: linear
+    description: Linear customer id attached to feedback issues.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: LINEAR_LABEL_BUG
+    category: linear
+    description: Linear label id applied to bug feedback.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: LINEAR_LABEL_IDEA
+    category: linear
+    description: Linear label id applied to idea feedback.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: LINEAR_LABEL_OTHER
+    category: linear
+    description: Linear label id applied to other feedback.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  # -------------------------------------------------------------- lifecycle
+  - name: SOCKET_DRAINER_BATCH_SIZE
+    category: lifecycle
+    description: WebSockets disconnected per batch during graceful shutdown.
+    type: integer
+    default: { app: 500 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: SOCKET_DRAINER_BATCH_INTERVAL_MS
+    category: lifecycle
+    description: Interval between socket-drain batches.
+    type: integer
+    default: { app: 1000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: SOCKET_DRAINER_SHUTDOWN_MS
+    category: lifecycle
+    description: >-
+      Total socket-drain budget on shutdown. The chart's
+      terminationGracePeriodSeconds must exceed this (default 45s vs 30s).
+    type: integer
+    default: { app: 30000 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  # ------------------------------------------------------------------- beam
+  - name: ULIMIT_NOFILE
+    category: beam
+    description: >-
+      Soft file-descriptor limit the release requests at boot. The
+      orchestrator must grant a hard limit at least this high (compose sets
+      ulimits; modern Kubernetes runtimes default higher).
+    type: integer
+    default: { app: 262144 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: ERL_FLAGS
+    category: beam
+    description: Extra BEAM VM flags appended at boot.
+    type: string
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: ERL_MAX_PORTS
+    category: beam
+    description: BEAM +Q — maximum ports (sockets/files).
+    type: integer
+    default: { app: 1048576 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: ERL_MAX_PROCESSES
+    category: beam
+    description: BEAM +P — maximum Erlang processes.
+    type: integer
+    default: { app: 4194304 }
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  - name: RELEASE_DISTRIBUTION
+    category: beam
+    description: Erlang distribution mode; the chart sets "name" for clustering.
+    type: string
+    required: false
+    secret: false
+    tier: internal
+    source: computed
+
+  - name: RELEASE_NODE
+    category: beam
+    description: Node name (edspace@<pod-ip>); set by the chart for clustering.
+    type: string
+    required: false
+    secret: false
+    tier: internal
+    source: computed
+
+  - name: RELEASE_COOKIE
+    category: beam
+    description: >-
+      Erlang distribution cookie shared by all nodes of one installation.
+      Set by the chart (stable Secret) so pods from different image builds
+      can cluster during rolling upgrades.
+    type: string
+    required: false
+    secret: true
+    tier: internal
+    source: computed
+
+  - name: DISCARD_ASSISTANT_DRAFTS
+    category: beam
+    description: One-shot flag consumed by the 2026-05 assistant-lifecycle migration.
+    type: boolean
+    required: false
+    secret: false
+    tier: internal
+    source: user
+
+  # ----------------------------------------------------------------- deploy
+  # Read by compose.yaml / the packaging layer, never by the app itself.
+  - name: POSTGRES_PASSWORD
+    category: deploy
+    description: >-
+      Password for the bundled Postgres (compose only). Feeds the composed
+      DATABASE_URL. Generate with scripts/generate-secrets.sh.
+    type: string
+    required: { chart: false, compose: true }
+    secret: true
+    tier: core
+    source: user
+
+  - name: EDSPACE_IMAGE
+    category: deploy
+    description: App image reference (compose only).
+    type: string
+    default: { compose: registry.edspace.io/edspace/edspace }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: EDSPACE_IMAGE_TAG
+    category: deploy
+    description: App image tag (compose only). Pin to a release tag.
+    type: string
+    default: { compose: latest }
+    required: false
+    secret: false
+    tier: core
+    source: user
+    example: v1.0.0
+
+  - name: EDSPACE_PORT
+    category: deploy
+    description: Host port the app is published on (compose only).
+    type: integer
+    default: { compose: 4000 }
+    required: false
+    secret: false
+    tier: advanced
+    source: user

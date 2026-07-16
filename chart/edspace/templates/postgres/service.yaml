@@ -1,0 +1,17 @@
+{{- if .Values.db.bundled.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "edspace.fullname" . }}-db
+  labels:
+    {{- include "edspace.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+  selector:
+    {{- include "edspace.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+{{- end }}

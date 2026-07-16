@@ -1,0 +1,14 @@
+apiVersion: v2
+name: edspace
+description: EdSpace — self-hosted deployment chart
+type: application
+home: https://edspace.dk
+kubeVersion: ">=1.27.0-0"
+
+# Chart semver; bump patch for template fixes, minor for new values keys,
+# major for breaking values changes. The repo git tag equals this version.
+version: 0.1.0
+
+# The app image tag this chart release was validated against; also the
+# default image tag. Releases pin this to a real app version (e.g. v1.0.0).
+appVersion: "0.0.0-dev"

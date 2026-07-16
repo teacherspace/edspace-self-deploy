@@ -1,0 +1,62 @@
+{{- /*
+One-time seed data. post-install only (never post-upgrade). Runs after
+regular resources, so the bundled Postgres is available; backoff covers its
+startup window. Seeding boots the full app: keep PDF off and memory generous.
+*/}}
+{{- if .Values.seed.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "edspace.fullname" . }}-seed
+  labels:
+    {{- include "edspace.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: post-install
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 5
+  activeDeadlineSeconds: {{ .Values.seed.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        {{- include "edspace.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: seed
+    spec:
+      restartPolicy: Never
+      {{- include "edspace.imagePullSecrets" . | nindent 6 }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: seed
+          image: {{ include "edspace.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/app/bin/seed"]
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: POOL_SIZE
+              value: "2"
+            - name: POOL_COUNT
+              value: "1"
+            - name: PDF_ENABLED
+              value: "false"
+            - name: CHROMIC_PDF_POOL_SIZE
+              value: "1"
+            {{- include "edspace.sharedEnv" . | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "edspace.fullname" . }}-env
+            - secretRef:
+                name: {{ include "edspace.fullname" . }}-env
+            {{- with .Values.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.seed.resources | nindent 12 }}
+{{- end }}

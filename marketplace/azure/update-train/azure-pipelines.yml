@@ -1,0 +1,86 @@
+# EdSpace managed-app update train.
+#
+# Rolls a new app image across customer managed-application instances:
+# Canary ring first, then (after an Environment approval gate) the Broad ring.
+# Routine updates use `az containerapp update --image` — atomic revision swap,
+# cannot rotate secrets, no template parameters needed. Infra changes use
+# scripts/update-instance.sh --template with bootstrapSecrets=false.
+#
+# TODO(edspace): cross-tenant auth. The service connections below must be able
+# to obtain tokens in each CUSTOMER tenant (the managed-app authorization
+# grants the publisher principal rights on the managed RG, but CI still needs
+# a token from that tenant). Spike options:
+#   a) multi-tenant app registration, consented per customer at onboarding
+#      (assumed here: one service connection, per-instance tenantId login)
+#   b) Azure Lighthouse delegation
+#   c) interactive operator runs for early customers
+
+trigger: none # manual only
+
+parameters:
+  - name: imageTag
+    displayName: "App image tag to roll out (e.g. v1.2.3)"
+    type: string
+  - name: expectedGitSha
+    displayName: "GIT_SHA the /version endpoint must report after update"
+    type: string
+  - name: registry
+    displayName: "Image registry/repository"
+    type: string
+    default: registry.edspace.io/edspace/edspace
+
+variables:
+  - name: instancesFile
+    value: marketplace/azure/update-train/instances/instances.json
+
+stages:
+  - stage: Canary
+    displayName: "Ring 0 — canary instances"
+    jobs:
+      - job: UpdateCanary
+        pool:
+          vmImage: ubuntu-latest
+        steps:
+          - task: AzureCLI@2
+            displayName: "Update + health-gate canary ring"
+            inputs:
+              azureSubscription: edspace-updatetrain # TODO(edspace): service connection
+              scriptType: bash
+              scriptLocation: inlineScript
+              inlineScript: |
+                set -euo pipefail
+                cd "$(Build.SourcesDirectory)"
+                marketplace/azure/update-train/scripts/update-instance.sh \
+                  --ring canary \
+                  --instances "$(instancesFile)" \
+                  --image "${{ parameters.registry }}:${{ parameters.imageTag }}" \
+                  --expected-sha "${{ parameters.expectedGitSha }}"
+
+  - stage: Broad
+    displayName: "Ring 1 — all remaining instances"
+    dependsOn: Canary
+    jobs:
+      - deployment: UpdateBroad
+        pool:
+          vmImage: ubuntu-latest
+        # Approval check configured on this ADO Environment (portal), not in YAML.
+        environment: edspace-updatetrain-broad
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - checkout: self
+                - task: AzureCLI@2
+                  displayName: "Update + health-gate broad ring"
+                  inputs:
+                    azureSubscription: edspace-updatetrain # TODO(edspace)
+                    scriptType: bash
+                    scriptLocation: inlineScript
+                    inlineScript: |
+                      set -euo pipefail
+                      cd "$(Build.SourcesDirectory)"
+                      marketplace/azure/update-train/scripts/update-instance.sh \
+                        --ring broad \
+                        --instances "$(instancesFile)" \
+                        --image "${{ parameters.registry }}:${{ parameters.imageTag }}" \
+                        --expected-sha "${{ parameters.expectedGitSha }}"

@@ -1,0 +1,12 @@
+# CI/lint values: external database, chart-known password (DATABASE_URL mode a).
+app:
+  host: edspace.example.org
+db:
+  host: postgres.internal.example
+  password: ci-dummy-password
+llm:
+  apiKey: ci-dummy-llm-key
+  baseUrl: https://example.openai.azure.com/
+mailer:
+  fromEmail: noreply@example.org
+  mailpaceApiKey: ci-dummy-mailpace-key

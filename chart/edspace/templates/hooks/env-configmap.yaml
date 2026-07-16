@@ -1,0 +1,19 @@
+{{- /*
+Hook-scoped copy of the env ConfigMap. Pre-install hook Jobs run before
+regular manifests exist, so they cannot envFrom the release ConfigMap on
+first install. Rendered from the same helper — it cannot drift.
+*/}}
+{{- if .Values.migrate.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "edspace.fullname" . }}-hook-env
+  labels:
+    {{- include "edspace.labels" . | nindent 4 }}
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation
+data:
+  {{- include "edspace.envConfigData" . | nindent 2 }}
+{{- end }}

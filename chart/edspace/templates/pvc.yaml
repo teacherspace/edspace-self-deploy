@@ -1,0 +1,21 @@
+{{- $p := .Values.storage.localDisk.persistence }}
+{{- if and (eq .Values.storage.adapter "local_disk") $p.enabled (not $p.existingClaim) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "edspace.fullname" . }}-uploads
+  labels:
+    {{- include "edspace.labels" . | nindent 4 }}
+  annotations:
+    # Uploads survive chart uninstall; delete the PVC explicitly to discard.
+    helm.sh/resource-policy: keep
+spec:
+  accessModes:
+    {{- toYaml $p.accessModes | nindent 4 }}
+  resources:
+    requests:
+      storage: {{ $p.size }}
+  {{- with $p.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+{{- end }}

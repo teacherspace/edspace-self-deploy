@@ -1,0 +1,82 @@
+{{- /*
+Bundled single-node Postgres with pgvector — EVALUATION ONLY. No backups, no
+replication, no PITR. Runs as the superuser so the app's migrations can
+CREATE EXTENSION vector/citext/pg_trgm without extra grants.
+*/}}
+{{- if .Values.db.bundled.enabled }}
+{{- $b := .Values.db.bundled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "edspace.fullname" . }}-db
+  labels:
+    {{- include "edspace.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  serviceName: {{ include "edspace.fullname" . }}-db
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "edspace.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        {{- include "edspace.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: database
+    spec:
+      securityContext:
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: {{ $b.image }}
+          env:
+            - name: POSTGRES_USER
+              value: {{ $b.username | quote }}
+            - name: POSTGRES_DB
+              value: {{ $b.database | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "edspace.fullname" . }}-db
+                  key: postgres-password
+            # Subdirectory keeps initdb happy on volumes with lost+found.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgres
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command: ["pg_isready", "-U", {{ $b.username | quote }}, "-d", {{ $b.database | quote }}]
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            tcpSocket:
+              port: postgres
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            {{- toYaml $b.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: {{ $b.persistence.size }}
+        {{- with $b.persistence.storageClass }}
+        storageClassName: {{ . }}
+        {{- end }}
+{{- end }}

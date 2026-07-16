@@ -1,0 +1,75 @@
+# EdSpace — Docker Compose deployment (pilots / evaluations / small installs).
+#
+# Setup: cp .env.example .env && ../scripts/generate-secrets.sh >> .env,
+# then edit .env (PHX_HOST, LLM + MailPace keys). See docs/install-compose.md.
+#
+# Values under `environment:` are composed by this file and override .env;
+# everything user-facing lives in .env (generated from config/contract.yaml).
+
+name: edspace
+
+services:
+  app:
+    image: ${EDSPACE_IMAGE:-registry.edspace.io/edspace/edspace}:${EDSPACE_IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # POSTGRES_PASSWORD is hex (scripts/generate-secrets.sh); a hand-set
+      # password must not contain URL-reserved characters (@ : / ? #).
+      DATABASE_URL: ecto://edspace:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/edspace
+      EDSPACE_FILE_STORAGE_ADAPTER: ${EDSPACE_FILE_STORAGE_ADAPTER:-local_disk}
+      EDSPACE_FILE_STORAGE_ROOT: ${EDSPACE_FILE_STORAGE_ROOT:-/app/uploads}
+    ports:
+      - "${EDSPACE_PORT:-4000}:4000"
+    ulimits:
+      # The release raises its soft fd limit to 262144 at boot (rel/env.sh.eex);
+      # the hard limit must be granted here.
+      nofile:
+        soft: 262144
+        hard: 262144
+    volumes:
+      - uploads:/app/uploads
+    depends_on:
+      db:
+        condition: service_healthy
+    # Healthcheck comes from the image (wget http://127.0.0.1:4000/health).
+    # Migrations run automatically before the server binds (bin/server).
+
+  db:
+    # Postgres 16 with pgvector preinstalled; citext/pg_trgm ship in contrib.
+    # The app's migrations run CREATE EXTENSION as the superuser below.
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: edspace
+      POSTGRES_DB: edspace
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U edspace -d edspace"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  # One-time demo/seed data: docker compose --profile seed run --rm seed
+  seed:
+    profiles: [seed]
+    image: ${EDSPACE_IMAGE:-registry.edspace.io/edspace/edspace}:${EDSPACE_IMAGE_TAG:-latest}
+    command: ["/app/bin/seed"]
+    env_file: .env
+    environment:
+      DATABASE_URL: ecto://edspace:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/edspace
+      # Seeding boots the full app; Chromium would waste ~1Gi here.
+      PDF_ENABLED: "false"
+      CHROMIC_PDF_POOL_SIZE: "1"
+      POOL_SIZE: "2"
+      POOL_COUNT: "1"
+    mem_limit: 2g
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  uploads:
+  pgdata:

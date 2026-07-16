@@ -1,0 +1,53 @@
+# CI/lint values: production-shaped — every secret in customer-managed
+# Secrets (DATABASE_URL mode c), azure_blob storage, clustering with 3
+# replicas, autoscaling, PDB, registry credentials, BYO TLS secret.
+app:
+  host: edspace.example.org
+  checkOrigin: https://edspace.example.org
+replicaCount: 3
+registryCredentials:
+  enabled: true
+  username: customer-x
+  password: ci-dummy-registry-token
+db:
+  host: pg-edspace.postgres.database.azure.com
+  username: edspace
+  database: edspace
+  sslMode: require
+  existingSecret: my-db-credentials
+  existingSecretKeys:
+    password: password
+secrets:
+  autoGenerate: false
+  existingSecret: my-app-secrets
+storage:
+  adapter: azure_blob
+  azureBlob:
+    account: stoedspaceprod
+    container: uploads
+    existingSecret: my-blob-credentials
+llm:
+  existingSecret: my-llm-credentials
+  baseUrl: https://example.openai.azure.com/
+  textDeployment: gpt-5.4
+  smallDeployment: gpt-5-mini
+  embeddingDeployment: text-embedding-3-small
+mailer:
+  fromEmail: noreply@example.org
+  existingSecret: my-mailer-credentials
+env:
+  LANGFUSE_ENVIRONMENT: production
+  EDSPACE_SPEECH_ENABLED: "false"
+envSecret:
+  LANGFUSE_SECRET_KEY: ci-dummy
+ingress:
+  tls:
+    secretName: my-edspace-tls
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 75
+pdb:
+  enabled: true
+  minAvailable: 2

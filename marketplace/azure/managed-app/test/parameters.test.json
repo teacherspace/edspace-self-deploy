@@ -1,0 +1,18 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "appSize": { "value": "standard" },
+    "enableAzureAi": { "value": true },
+    "textModelCapacity": { "value": 10 },
+    "smallModelCapacity": { "value": 10 },
+    "embeddingModelCapacity": { "value": 10 },
+    "enableSpeech": { "value": true },
+    "mailFromEmail": { "value": "noreply@example.test" },
+    "mailpaceApiKey": { "value": "test-dummy-mailpace-key" },
+    "registryUsername": { "value": "test-customer" },
+    "registryPassword": { "value": "test-dummy-registry-token" },
+    "containerImage": { "value": "registry.edspace.io/edspace/edspace:latest" },
+    "bootstrapSecrets": { "value": true }
+  }
+}

@@ -1,0 +1,286 @@
+# Default values for the EdSpace chart.
+# Full setting reference: docs/configuration.md and docs/env-vars.md in the
+# edspace-deploy repository. values.schema.json validates this structure and
+# enforces the install-time invariants (app.host, database, secrets).
+
+app:
+  # -- Public hostname the app is served on (PHX_HOST). Required.
+  host: ""
+  # -- WebSocket origin check override (PHX_CHECK_ORIGIN). Empty = derived from host.
+  checkOrigin: ""
+
+image:
+  # -- App image. Overridable for air-gapped mirrors.
+  repository: registry.edspace.io/edspace/edspace
+  # -- Image tag; defaults to the chart appVersion.
+  tag: ""
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+
+# -- Pre-created image pull secrets, e.g. [{name: my-pull-secret}].
+imagePullSecrets: []
+
+registryCredentials:
+  # -- Render a dockerconfigjson pull Secret from the credentials below.
+  enabled: false
+  # -- Registry host the credentials apply to.
+  registry: registry.edspace.io
+  # -- Per-customer registry username.
+  username: ""
+  # -- Per-customer registry token.
+  password: ""
+
+# -- Number of app replicas. >1 requires clustering.enabled (default on) and
+# non-local file storage (see storage.adapter).
+replicaCount: 1
+
+db:
+  bundled:
+    # -- Run an in-cluster Postgres (pgvector). EVALUATION ONLY — no backups,
+    # no replication. Use an external managed Postgres in production.
+    enabled: false
+    # -- Postgres image; must provide the pgvector extension.
+    image: pgvector/pgvector:pg16
+    database: edspace
+    username: edspace
+    # -- Superuser password. Empty = generated on first install and kept.
+    password: ""
+    persistence:
+      size: 10Gi
+      storageClass: ""
+    resources:
+      requests: { cpu: 250m, memory: 512Mi }
+      limits: { memory: 1Gi }
+  # External database (used when bundled.enabled is false).
+  # Requires Postgres >= 16.3 with the vector, citext and pg_trgm extensions
+  # available — see docs/database.md.
+  host: ""
+  port: 5432
+  database: edspace
+  username: edspace
+  # -- Database password rendered into the chart-managed Secret (mode a).
+  password: ""
+  # -- "require" appends ?ssl=true to the composed DATABASE_URL. See
+  # docs/database.md for the app's current TLS limitations.
+  sslMode: ""
+  # -- Existing Secret with database credentials (modes b/c); takes precedence
+  # over db.password.
+  existingSecret: ""
+  existingSecretKeys:
+    # -- Key holding a complete ecto:// URL (mode b).
+    url: ""
+    # -- Key holding only the password (mode c; composed with db.host etc.).
+    # Passwords containing URL-reserved characters must be pre-encoded.
+    password: ""
+
+secrets:
+  # -- Generate SECRET_KEY_BASE / TOKEN_SIGNING_SECRET / RELEASE_COOKIE on
+  # first install and keep them across upgrades AND uninstalls. Fine for
+  # pilots; for GitOps (Argo/Flux) or production set explicit values or
+  # existingSecret — template-only rendering cannot reuse generated values.
+  autoGenerate: true
+  secretKeyBase: ""
+  tokenSigningSecret: ""
+  # -- Erlang distribution cookie; only used when clustering.enabled.
+  releaseCookie: ""
+  # -- Existing Secret holding the three keys below.
+  existingSecret: ""
+  existingSecretKeys:
+    secretKeyBase: secret-key-base
+    tokenSigningSecret: token-signing-secret
+    releaseCookie: release-cookie
+
+storage:
+  # -- Attachment storage backend: local_disk (needs persistence) or azure_blob.
+  adapter: local_disk
+  localDisk:
+    # -- Mount path / EDSPACE_FILE_STORAGE_ROOT.
+    root: /app/uploads
+    persistence:
+      # -- Persist uploads in a PVC. Disabling loses uploads on restart.
+      enabled: true
+      size: 20Gi
+      storageClass: ""
+      # -- ReadWriteOnce restricts to replicaCount 1 (schema-enforced); use an
+      # RWX class or azure_blob for multiple replicas.
+      accessModes: [ReadWriteOnce]
+      existingClaim: ""
+  azureBlob:
+    # -- Storage account name (AZURE_STORAGE_ACCOUNT).
+    account: ""
+    # -- Blob container, must already exist (AZURE_STORAGE_CONTAINER).
+    container: ""
+    # -- Account key; prefer existingSecret.
+    key: ""
+    existingSecret: ""
+    existingSecretKey: azure-storage-key
+
+llm:
+  # -- LLM provider (EDSPACE_LLM_PROVIDER): azure, openai, anthropic, ...
+  provider: azure
+  # -- API key; prefer existingSecret.
+  apiKey: ""
+  existingSecret: ""
+  existingSecretKey: llm-api-key
+  # -- Provider endpoint (EDSPACE_LLM_BASE_URL); required for azure.
+  baseUrl: ""
+  # -- Azure OpenAI API version.
+  apiVersion: ""
+  # -- provider:model overrides; empty = app defaults.
+  textModel: ""
+  # -- Azure deployment name for the text model.
+  textDeployment: ""
+  smallModel: ""
+  smallDeployment: ""
+  embeddingModel: ""
+  embeddingDeployment: ""
+
+mailer:
+  # -- Verified MailPace sender address (MAILER_FROM_EMAIL).
+  fromEmail: ""
+  fromName: ""
+  # -- MailPace API token — the app requires it in production. Prefer existingSecret.
+  mailpaceApiKey: ""
+  existingSecret: ""
+  existingSecretKey: mailpace-api-key
+
+# -- Extra non-secret env vars (validated against the app contract).
+env: {}
+# -- Extra secret env vars (validated; rendered into the app Secret).
+envSecret: {}
+# -- Raw envFrom entries (customer-managed ConfigMaps/Secrets, ESO, CSI...).
+extraEnvFrom: []
+# -- Raw corev1.EnvVar entries appended to the app container.
+extraEnv: []
+
+service:
+  type: ClusterIP
+  port: 80
+
+ingress:
+  enabled: true
+  className: nginx
+  # -- Extra ingress annotations; the chart adds none by default.
+  annotations: {}
+  # -- Ingress host; defaults to app.host.
+  host: ""
+  path: /
+  pathType: Prefix
+  tls:
+    enabled: true
+    # -- Existing TLS Secret name (used verbatim). Empty + certManager off =
+    # <fullname>-tls (bring your own contents).
+    secretName: ""
+    certManager:
+      # -- Add the cert-manager issuer annotation and let it populate the TLS secret.
+      enabled: false
+      issuer: ""
+      issuerKind: ClusterIssuer
+
+resources:
+  requests:
+    cpu: 500m
+    memory: 1Gi
+  limits:
+    # No CPU limit: CFS throttling collapses BEAM schedulers. If your policy
+    # requires one, also pin schedulers via extraEnv ERL_FLAGS "+S <n>".
+    memory: 2Gi
+
+probes:
+  # Liveness deliberately avoids /health (DB-coupled): a DB outage must not
+  # restart-loop the app.
+  liveness:
+    enabled: true
+    path: /version
+    initialDelaySeconds: 10
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 6
+  readiness:
+    enabled: true
+    path: /health
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  # Startup budget covers migrations running before the server binds.
+  startup:
+    enabled: true
+    path: /health
+    periodSeconds: 5
+    failureThreshold: 30
+
+clustering:
+  # -- Wire Erlang clustering (headless service + DNS_CLUSTER_QUERY +
+  # RELEASE_NODE/RELEASE_COOKIE). Required for replicaCount > 1.
+  enabled: true
+
+lifecycle:
+  # -- Must exceed the app's socket-drain budget (SOCKET_DRAINER_SHUTDOWN_MS, 30s).
+  terminationGracePeriodSeconds: 45
+
+strategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0
+
+migrate:
+  # -- Run migrations as a pre-upgrade (and pre-install with external DB) Job
+  # so a failed migration aborts before pods roll.
+  enabled: true
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+seed:
+  # -- One-time demo/seed data Job (post-install only).
+  enabled: false
+  activeDeadlineSeconds: 900
+  resources:
+    requests: { cpu: 250m, memory: 1Gi }
+    limits: { memory: 2Gi }
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 75
+  targetMemoryUtilizationPercentage: null
+  behavior: {}
+
+pdb:
+  enabled: false
+  minAvailable: 1
+
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+  # -- The app never calls the Kubernetes API.
+  automount: false
+
+podAnnotations: {}
+podLabels: {}
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+  # No readOnlyRootFilesystem: Chromium (PDF export) and upload staging write
+  # to the container filesystem.
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+priorityClassName: ""
+
+# -- Cluster DNS domain, used for the DNS_CLUSTER_QUERY value.
+clusterDomain: cluster.local
+nameOverride: ""
+fullnameOverride: ""

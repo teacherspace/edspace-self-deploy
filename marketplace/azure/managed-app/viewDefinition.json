@@ -1,0 +1,58 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/viewdefinition/0.0.1-preview/ViewDefinition.json#",
+  "contentVersion": "0.0.0.1",
+  "views": [
+    {
+      "kind": "Overview",
+      "properties": {
+        "header": "Your EdSpace instance",
+        "description": "EdSpace is running in this managed application. The application URL is shown under Parameters and Outputs (appUrl). Updates are rolled out automatically by EdSpace — you do not need to maintain the resources in the managed resource group.",
+        "commands": [
+          {
+            "displayName": "EdSpace documentation",
+            "path": "https://edspace.io/docs"
+          },
+          {
+            "displayName": "Contact support",
+            "path": "https://edspace.io/support"
+          }
+        ]
+      }
+    },
+    {
+      "kind": "Metrics",
+      "properties": {
+        "displayName": "Application metrics",
+        "version": "1.0.0",
+        "charts": [
+          {
+            "displayName": "Requests",
+            "chartType": "Line",
+            "metrics": [
+              {
+                "name": "Requests",
+                "aggregationType": 1,
+                "resourceTagFilter": [],
+                "resourceType": "Microsoft.App/containerApps",
+                "namespace": "microsoft.app/containerapps"
+              }
+            ]
+          },
+          {
+            "displayName": "Replica restarts",
+            "chartType": "Line",
+            "metrics": [
+              {
+                "name": "RestartCount",
+                "aggregationType": 3,
+                "resourceTagFilter": [],
+                "resourceType": "Microsoft.App/containerApps",
+                "namespace": "microsoft.app/containerapps"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

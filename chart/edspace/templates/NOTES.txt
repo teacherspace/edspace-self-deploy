@@ -1,0 +1,49 @@
+EdSpace {{ .Chart.AppVersion }} deployed as release {{ .Release.Name }}.
+
+{{- if .Values.ingress.enabled }}
+
+  URL: https://{{ .Values.ingress.host | default .Values.app.host }}
+{{- else }}
+
+  Ingress is disabled. Port-forward to test:
+    kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "edspace.fullname" . }} 8080:{{ .Values.service.port }}
+{{- end }}
+
+Watch the rollout:
+  kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "edspace.fullname" . }}
+
+{{- if and .Values.secrets.autoGenerate (not .Values.secrets.existingSecret) }}
+
+WARNING - generated secrets are in use.
+  SECRET_KEY_BASE / TOKEN_SIGNING_SECRET / RELEASE_COOKIE were generated on
+  first install and are kept in Secret {{ include "edspace.fullname" . }}-generated.
+  Retrieve them:
+    kubectl -n {{ .Release.Namespace }} get secret {{ include "edspace.fullname" . }}-generated -o yaml
+  For production or GitOps (Argo/Flux renders without cluster access and
+  would rotate them!) set secrets.* values or secrets.existingSecret.
+{{- end }}
+
+{{- if .Values.db.bundled.enabled }}
+
+WARNING - bundled Postgres is for evaluation only.
+  Single node, no backups, no replication. Point db.* at a managed
+  Postgres (>= 16.3 with vector/citext/pg_trgm) before production use.
+  On first install migrations run at app boot; from the next upgrade on,
+  they run in a pre-upgrade Job.
+{{- end }}
+
+{{- if not .Values.seed.enabled }}
+
+Seed demo data (optional, once):
+  helm upgrade {{ .Release.Name }} <chart> --reuse-values --set seed.enabled=true
+  (or run: kubectl -n {{ .Release.Namespace }} create job --from=... manually)
+{{- end }}
+
+{{- if and (gt (int .Values.replicaCount) 1) (not .Values.clustering.enabled) }}
+
+WARNING - replicaCount > 1 with clustering disabled: LiveView/PubSub events
+will not propagate between pods. Enable clustering.
+{{- end }}
+
+Verify the running build:
+  kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "edspace.fullname" . }} -- wget -qO- http://127.0.0.1:4000/version

@@ -1,0 +1,18 @@
+# CI/lint values: bundled eval Postgres, seed job, cert-manager TLS.
+app:
+  host: edspace.example.org
+db:
+  bundled:
+    enabled: true
+llm:
+  apiKey: ci-dummy-llm-key
+mailer:
+  fromEmail: noreply@example.org
+  mailpaceApiKey: ci-dummy-mailpace-key
+seed:
+  enabled: true
+ingress:
+  tls:
+    certManager:
+      enabled: true
+      issuer: letsencrypt-prod

@@ -1,0 +1,68 @@
+{{- /*
+Database migrations as a Helm hook: a failed migration aborts the upgrade
+while the old pods keep serving. The app also migrates on boot (advisory-lock
+safe), so the boot-time re-run is a no-op.
+
+With the bundled Postgres the job only runs pre-UPGRADE: on first install the
+database StatefulSet does not exist yet — boot-time migration covers it.
+*/}}
+{{- if .Values.migrate.enabled }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "edspace.fullname" . }}-migrate
+  labels:
+    {{- include "edspace.labels" . | nindent 4 }}
+  annotations:
+    {{- if .Values.db.bundled.enabled }}
+    helm.sh/hook: pre-upgrade
+    {{- else }}
+    helm.sh/hook: pre-install,pre-upgrade
+    {{- end }}
+    helm.sh/hook-weight: "0"
+    helm.sh/hook-delete-policy: before-hook-creation
+spec:
+  backoffLimit: {{ .Values.migrate.backoffLimit }}
+  activeDeadlineSeconds: {{ .Values.migrate.activeDeadlineSeconds }}
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        {{- include "edspace.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      {{- include "edspace.imagePullSecrets" . | nindent 6 }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ include "edspace.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["/app/bin/migrate"]
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            # Small pool; no Chromium — migrations don't render PDFs.
+            - name: POOL_SIZE
+              value: "2"
+            - name: POOL_COUNT
+              value: "1"
+            - name: PDF_ENABLED
+              value: "false"
+            {{- include "edspace.sharedEnv" . | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "edspace.fullname" . }}-hook-env
+            - secretRef:
+                name: {{ include "edspace.fullname" . }}-hook-env
+            {{- with .Values.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resources:
+            {{- toYaml .Values.migrate.resources | nindent 12 }}
+{{- end }}

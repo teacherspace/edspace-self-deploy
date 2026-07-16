@@ -1,0 +1,40 @@
+{{- if .Values.ingress.enabled }}
+{{- $ing := .Values.ingress }}
+{{- $host := $ing.host | default .Values.app.host }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "edspace.fullname" . }}
+  labels:
+    {{- include "edspace.labels" . | nindent 4 }}
+  {{- $annotations := $ing.annotations | default dict }}
+  {{- if $ing.tls.certManager.enabled }}
+  {{- $key := ternary "cert-manager.io/cluster-issuer" "cert-manager.io/issuer" (eq $ing.tls.certManager.issuerKind "ClusterIssuer") }}
+  {{- $annotations = merge (dict $key (required "ingress.tls.certManager.issuer is required when certManager.enabled" $ing.tls.certManager.issuer)) $annotations }}
+  {{- end }}
+  {{- with $annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ $ing.className }}
+  {{- if $ing.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ $host | quote }}
+      # secretName is honoured verbatim when set; otherwise <fullname>-tls
+      # (populated by cert-manager, or created by you).
+      secretName: {{ $ing.tls.secretName | default (printf "%s-tls" (include "edspace.fullname" .)) }}
+  {{- end }}
+  rules:
+    - host: {{ $host | quote }}
+      http:
+        paths:
+          - path: {{ $ing.path }}
+            pathType: {{ $ing.pathType }}
+            backend:
+              service:
+                name: {{ include "edspace.fullname" . }}
+                port:
+                  name: http
+{{- end }}

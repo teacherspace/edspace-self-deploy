@@ -1,0 +1,23 @@
+{{- /*
+Headless service backing DNS_CLUSTER_QUERY: dns_cluster resolves it to the
+pod IPs and connects the BEAM nodes. publishNotReadyAddresses lets nodes
+discover each other before they pass readiness (boot-time migrations).
+*/}}
+{{- if .Values.clustering.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "edspace.fullname" . }}-headless
+  labels:
+    {{- include "edspace.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: http
+      port: 4000
+      targetPort: http
+      protocol: TCP
+  selector:
+    {{- include "edspace.selectorLabels" . | nindent 4 }}
+{{- end }}

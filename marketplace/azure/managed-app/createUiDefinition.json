@@ -1,0 +1,307 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/0.1.2-preview/CreateUIDefinition.MultiVm.json#",
+  "handler": "Microsoft.Azure.CreateUIDef",
+  "version": "0.1.2-preview",
+  "parameters": {
+    "basics": [
+      {
+        "name": "appSize",
+        "type": "Microsoft.Common.DropDown",
+        "label": "Application size",
+        "defaultValue": "Standard (1 vCPU / 2 GiB)",
+        "toolTip": "Standard suits most schools. Choose Large for heavy PDF/export usage or many concurrent users. EdSpace scales vertically; contact support before expecting horizontal scale.",
+        "constraints": {
+          "allowedValues": [
+            { "label": "Standard (1 vCPU / 2 GiB)", "value": "standard" },
+            { "label": "Large (2 vCPU / 4 GiB)", "value": "large" }
+          ],
+          "required": true
+        }
+      }
+    ],
+    "steps": [
+      {
+        "name": "database",
+        "label": "Database",
+        "elements": [
+          {
+            "name": "sizingInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": true,
+            "options": {
+              "icon": "Info",
+              "text": "A PostgreSQL 16 Flexible Server is provisioned inside the managed resource group with 7-day backups. The Burstable tier fits most installations."
+            }
+          },
+          {
+            "name": "pgSku",
+            "type": "Microsoft.Common.DropDown",
+            "label": "PostgreSQL compute",
+            "defaultValue": "Burstable B2s (2 vCores) — recommended",
+            "toolTip": "General Purpose is for large multi-school tenants.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Burstable B2s (2 vCores) — recommended", "value": "Standard_B2s" },
+                { "label": "General Purpose D2ds_v5 (2 vCores)", "value": "Standard_D2ds_v5" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "pgStorageGB",
+            "type": "Microsoft.Common.Slider",
+            "label": "Storage (GiB)",
+            "subLabel": "GiB",
+            "defaultValue": 32,
+            "constraints": { "min": 32, "max": 256, "required": true },
+            "toolTip": "Storage auto-grows; this sets the initial allocation."
+          }
+        ]
+      },
+      {
+        "name": "ai",
+        "label": "AI services",
+        "elements": [
+          {
+            "name": "enableAzureAi",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Language model hosting",
+            "defaultValue": "Deploy Azure AI in this subscription (recommended)",
+            "toolTip": "EdSpace needs an OpenAI-compatible model endpoint. The recommended option provisions Azure AI Foundry with the models EdSpace is validated against.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Deploy Azure AI in this subscription (recommended)", "value": true },
+                { "label": "Use an existing Azure OpenAI endpoint", "value": false }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "quotaInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": "[steps('ai').enableAzureAi]",
+            "options": {
+              "icon": "Warning",
+              "text": "Model deployments draw on YOUR subscription's Azure OpenAI quota in the selected region. If deployment fails with a quota error, request quota for gpt-5.4, gpt-5-mini and text-embedding-3-small, or lower the capacities below.",
+              "uri": "https://aka.ms/oai/quotaincrease"
+            }
+          },
+          {
+            "name": "aiLocation",
+            "type": "Microsoft.Common.DropDown",
+            "label": "AI region",
+            "visible": "[steps('ai').enableAzureAi]",
+            "defaultValue": "Sweden Central (recommended)",
+            "toolTip": "Decoupled from the application region for model availability. Sweden Central offers the validated model set in the EU.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Sweden Central (recommended)", "value": "swedencentral" },
+                { "label": "West Europe", "value": "westeurope" },
+                { "label": "East US", "value": "eastus" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "textModelCapacity",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Text model capacity (K TPM)",
+            "visible": "[steps('ai').enableAzureAi]",
+            "defaultValue": "50",
+            "toolTip": "Thousands of tokens-per-minute for gpt-5.4.",
+            "constraints": {
+              "required": true,
+              "regex": "^[1-9][0-9]{0,3}$",
+              "validationMessage": "Enter a whole number between 1 and 9999."
+            }
+          },
+          {
+            "name": "smallModelCapacity",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Small model capacity (K TPM)",
+            "visible": "[steps('ai').enableAzureAi]",
+            "defaultValue": "50",
+            "toolTip": "Thousands of tokens-per-minute for gpt-5-mini.",
+            "constraints": {
+              "required": true,
+              "regex": "^[1-9][0-9]{0,3}$",
+              "validationMessage": "Enter a whole number between 1 and 9999."
+            }
+          },
+          {
+            "name": "embeddingModelCapacity",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Embedding model capacity (K TPM)",
+            "visible": "[steps('ai').enableAzureAi]",
+            "defaultValue": "100",
+            "toolTip": "Thousands of tokens-per-minute for text-embedding-3-small.",
+            "constraints": {
+              "required": true,
+              "regex": "^[1-9][0-9]{0,3}$",
+              "validationMessage": "Enter a whole number between 1 and 9999."
+            }
+          },
+          {
+            "name": "enableSpeech",
+            "type": "Microsoft.Common.CheckBox",
+            "label": "Enable speech features (speech-to-text / text-to-speech)",
+            "visible": "[steps('ai').enableAzureAi]",
+            "defaultValue": true,
+            "toolTip": "Served from the same Azure AI account.",
+            "constraints": { "required": false }
+          },
+          {
+            "name": "byoLlmBaseUrl",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Azure OpenAI endpoint URL",
+            "visible": "[not(steps('ai').enableAzureAi)]",
+            "placeholder": "https://my-openai.openai.azure.com/",
+            "constraints": {
+              "required": true,
+              "regex": "^https://.+",
+              "validationMessage": "Enter the https:// endpoint of your Azure OpenAI resource."
+            }
+          },
+          {
+            "name": "byoLlmApiKey",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": { "password": "API key", "confirmPassword": "Confirm API key" },
+            "visible": "[not(steps('ai').enableAzureAi)]",
+            "options": { "hideConfirmation": true },
+            "constraints": { "required": true }
+          },
+          {
+            "name": "byoLlmTextDeployment",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Text model deployment name",
+            "visible": "[not(steps('ai').enableAzureAi)]",
+            "placeholder": "gpt-5.4",
+            "constraints": { "required": true }
+          },
+          {
+            "name": "byoLlmSmallDeployment",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Small model deployment name",
+            "visible": "[not(steps('ai').enableAzureAi)]",
+            "placeholder": "gpt-5-mini",
+            "constraints": { "required": true }
+          },
+          {
+            "name": "byoLlmEmbeddingDeployment",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Embedding model deployment name (1536 dimensions)",
+            "visible": "[not(steps('ai').enableAzureAi)]",
+            "placeholder": "text-embedding-3-small",
+            "constraints": { "required": true }
+          },
+          {
+            "name": "byoLlmApiVersion",
+            "type": "Microsoft.Common.TextBox",
+            "label": "API version (optional)",
+            "visible": "[not(steps('ai').enableAzureAi)]",
+            "placeholder": "2024-10-21",
+            "constraints": { "required": false }
+          }
+        ]
+      },
+      {
+        "name": "application",
+        "label": "Application",
+        "elements": [
+          {
+            "name": "customDomain",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Custom domain (optional)",
+            "placeholder": "edspace.myschool.example",
+            "toolTip": "Leave empty to use the generated *.azurecontainerapps.io address. Custom domains are activated after installation by EdSpace support — see the installation guide.",
+            "constraints": {
+              "required": false,
+              "regex": "^$|^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
+              "validationMessage": "Enter a valid DNS hostname, or leave empty."
+            }
+          },
+          {
+            "name": "mailFromEmail",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Email from address",
+            "toolTip": "Sender for transactional email; must be verified in your MailPace account.",
+            "constraints": {
+              "required": true,
+              "regex": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+              "validationMessage": "Enter a valid email address."
+            }
+          },
+          {
+            "name": "mailFromName",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Email from name",
+            "defaultValue": "EdSpace",
+            "constraints": { "required": false }
+          },
+          {
+            "name": "mailpaceApiKey",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": { "password": "MailPace API key", "confirmPassword": "Confirm MailPace API key" },
+            "toolTip": "EdSpace sends transactional email through MailPace (mailpace.com).",
+            "options": { "hideConfirmation": true },
+            "constraints": { "required": true }
+          }
+        ]
+      },
+      {
+        "name": "license",
+        "label": "EdSpace license",
+        "elements": [
+          {
+            "name": "licenseInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": true,
+            "options": {
+              "icon": "Info",
+              "text": "Enter the registry credentials from your EdSpace welcome email. They authorize this installation to pull EdSpace software updates."
+            }
+          },
+          {
+            "name": "registryUsername",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Registry username",
+            "constraints": { "required": true }
+          },
+          {
+            "name": "registryPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": { "password": "Registry token", "confirmPassword": "Confirm registry token" },
+            "options": { "hideConfirmation": true },
+            "constraints": { "required": true }
+          }
+        ]
+      }
+    ],
+    "outputs": {
+      "location": "[location()]",
+      "appSize": "[basics('appSize')]",
+      "pgSkuName": "[steps('database').pgSku]",
+      "pgSkuTier": "[if(equals(steps('database').pgSku, 'Standard_B2s'), 'Burstable', 'GeneralPurpose')]",
+      "pgStorageGB": "[steps('database').pgStorageGB]",
+      "enableAzureAi": "[steps('ai').enableAzureAi]",
+      "aiLocation": "[if(steps('ai').enableAzureAi, steps('ai').aiLocation, 'swedencentral')]",
+      "textModelCapacity": "[if(steps('ai').enableAzureAi, int(steps('ai').textModelCapacity), 50)]",
+      "smallModelCapacity": "[if(steps('ai').enableAzureAi, int(steps('ai').smallModelCapacity), 50)]",
+      "embeddingModelCapacity": "[if(steps('ai').enableAzureAi, int(steps('ai').embeddingModelCapacity), 100)]",
+      "enableSpeech": "[and(steps('ai').enableAzureAi, steps('ai').enableSpeech)]",
+      "byoLlmBaseUrl": "[if(steps('ai').enableAzureAi, '', steps('ai').byoLlmBaseUrl)]",
+      "byoLlmApiKey": "[if(steps('ai').enableAzureAi, '', steps('ai').byoLlmApiKey)]",
+      "byoLlmTextDeployment": "[if(steps('ai').enableAzureAi, '', steps('ai').byoLlmTextDeployment)]",
+      "byoLlmSmallDeployment": "[if(steps('ai').enableAzureAi, '', steps('ai').byoLlmSmallDeployment)]",
+      "byoLlmEmbeddingDeployment": "[if(steps('ai').enableAzureAi, '', steps('ai').byoLlmEmbeddingDeployment)]",
+      "byoLlmApiVersion": "[if(steps('ai').enableAzureAi, '', steps('ai').byoLlmApiVersion)]",
+      "customDomain": "[steps('application').customDomain]",
+      "mailFromEmail": "[steps('application').mailFromEmail]",
+      "mailFromName": "[steps('application').mailFromName]",
+      "mailpaceApiKey": "[steps('application').mailpaceApiKey]",
+      "registryUsername": "[steps('license').registryUsername]",
+      "registryPassword": "[steps('license').registryPassword]",
+      "bootstrapSecrets": true
+    }
+  }
+}

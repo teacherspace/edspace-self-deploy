@@ -1,0 +1,9 @@
+# build artifacts
+dist/
+marketplace/azure/managed-app/dist/
+*.tgz
+
+# local environment files (never commit real credentials)
+compose/.env
+compose/.env.*
+!compose/.env.example
