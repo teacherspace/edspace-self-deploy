@@ -2,6 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$comment": "Hand-maintained structural half of the chart schema. gen.py merges in env/envSecret validation from contract.yaml and writes chart/edspace/values.schema.json.",
   "type": "object",
+  "additionalProperties": false,
   "properties": {
     "app": {
       "type": "object",
@@ -13,15 +14,17 @@
         },
         "checkOrigin": { "type": "string" }
       },
+      "additionalProperties": false,
       "required": ["host"]
     },
     "image": {
       "type": "object",
       "properties": {
         "repository": { "type": "string", "minLength": 1 },
-        "tag": { "type": "string" },
+        "tag": { "type": "string", "not": { "enum": ["latest"] } },
         "pullPolicy": { "enum": ["Always", "IfNotPresent", "Never"] }
-      }
+      },
+      "additionalProperties": false
     },
     "imagePullSecrets": { "type": "array" },
     "registryCredentials": {
@@ -32,6 +35,7 @@
         "username": { "type": "string" },
         "password": { "type": "string" }
       },
+      "additionalProperties": false,
       "if": { "properties": { "enabled": { "const": true } } },
       "then": {
         "properties": {
@@ -58,26 +62,30 @@
               "properties": {
                 "size": { "type": "string" },
                 "storageClass": { "type": "string" }
-              }
+              },
+              "additionalProperties": false
             },
             "resources": { "type": "object" }
-          }
+          },
+          "additionalProperties": false
         },
         "host": { "type": "string" },
-        "port": { "type": "integer" },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
         "database": { "type": "string" },
         "username": { "type": "string" },
         "password": { "type": "string" },
-        "sslMode": { "type": "string" },
+        "sslMode": { "enum": ["", "require"] },
         "existingSecret": { "type": "string" },
         "existingSecretKeys": {
           "type": "object",
           "properties": {
             "url": { "type": "string" },
             "password": { "type": "string" }
-          }
+          },
+          "additionalProperties": false
         }
-      }
+      },
+      "additionalProperties": false
     },
     "secrets": {
       "type": "object",
@@ -93,9 +101,11 @@
             "secretKeyBase": { "type": "string" },
             "tokenSigningSecret": { "type": "string" },
             "releaseCookie": { "type": "string" }
-          }
+          },
+          "additionalProperties": false
         }
-      }
+      },
+      "additionalProperties": false
     },
     "storage": {
       "type": "object",
@@ -111,11 +121,13 @@
                 "enabled": { "type": "boolean" },
                 "size": { "type": "string" },
                 "storageClass": { "type": "string" },
-                "accessModes": { "type": "array", "items": { "type": "string" } },
+                "accessModes": { "type": "array", "items": { "enum": ["ReadWriteOnce", "ReadOnlyMany", "ReadWriteMany", "ReadWriteOncePod"] } },
                 "existingClaim": { "type": "string" }
-              }
+              },
+              "additionalProperties": false
             }
-          }
+          },
+          "additionalProperties": false
         },
         "azureBlob": {
           "type": "object",
@@ -125,9 +137,11 @@
             "key": { "type": "string" },
             "existingSecret": { "type": "string" },
             "existingSecretKey": { "type": "string" }
-          }
+          },
+          "additionalProperties": false
         }
       },
+      "additionalProperties": false,
       "allOf": [
         {
           "if": { "properties": { "adapter": { "const": "azure_blob" } } },
@@ -148,7 +162,7 @@
     "llm": {
       "type": "object",
       "properties": {
-        "provider": { "type": "string" },
+        "provider": { "enum": ["azure", "openai", "anthropic", "google", "groq", "mistral", "openrouter", "deepseek", "deepinfra", "cerebras", "xai", "amazon_bedrock"] },
         "apiKey": { "type": "string" },
         "existingSecret": { "type": "string" },
         "existingSecretKey": { "type": "string" },
@@ -160,7 +174,8 @@
         "smallDeployment": { "type": "string" },
         "embeddingModel": { "type": "string" },
         "embeddingDeployment": { "type": "string" }
-      }
+      },
+      "additionalProperties": false
     },
     "mailer": {
       "type": "object",
@@ -170,16 +185,18 @@
         "mailpaceApiKey": { "type": "string" },
         "existingSecret": { "type": "string" },
         "existingSecretKey": { "type": "string" }
-      }
+      },
+      "additionalProperties": false
     },
     "extraEnvFrom": { "type": "array" },
     "extraEnv": { "type": "array" },
     "service": {
       "type": "object",
       "properties": {
-        "type": { "type": "string" },
-        "port": { "type": "integer" }
-      }
+        "type": { "enum": ["ClusterIP", "NodePort", "LoadBalancer"] },
+        "port": { "type": "integer", "minimum": 1, "maximum": 65535 }
+      },
+      "additionalProperties": false
     },
     "ingress": {
       "type": "object",
@@ -189,7 +206,7 @@
         "annotations": { "type": "object" },
         "host": { "type": "string" },
         "path": { "type": "string" },
-        "pathType": { "type": "string" },
+        "pathType": { "enum": ["Exact", "Prefix", "ImplementationSpecific"] },
         "tls": {
           "type": "object",
           "properties": {
@@ -201,41 +218,101 @@
                 "enabled": { "type": "boolean" },
                 "issuer": { "type": "string" },
                 "issuerKind": { "enum": ["Issuer", "ClusterIssuer"] }
-              }
+              },
+              "additionalProperties": false
             }
-          }
+          },
+          "additionalProperties": false
         }
-      }
+      },
+      "additionalProperties": false
     },
     "resources": { "type": "object" },
-    "probes": { "type": "object" },
+    "probes": {
+      "type": "object",
+      "properties": {
+        "liveness": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "path": { "type": "string" },
+            "initialDelaySeconds": { "type": "integer", "minimum": 0 },
+            "periodSeconds": { "type": "integer", "minimum": 1 },
+            "timeoutSeconds": { "type": "integer", "minimum": 1 },
+            "failureThreshold": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "readiness": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "path": { "type": "string" },
+            "initialDelaySeconds": { "type": "integer", "minimum": 0 },
+            "periodSeconds": { "type": "integer", "minimum": 1 },
+            "timeoutSeconds": { "type": "integer", "minimum": 1 },
+            "failureThreshold": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "startup": {
+          "type": "object",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "path": { "type": "string" },
+            "periodSeconds": { "type": "integer", "minimum": 1 },
+            "failureThreshold": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "clustering": {
       "type": "object",
-      "properties": { "enabled": { "type": "boolean" } }
+      "properties": { "enabled": { "type": "boolean" } },
+      "additionalProperties": false
     },
     "lifecycle": {
       "type": "object",
       "properties": {
         "terminationGracePeriodSeconds": { "type": "integer", "minimum": 1 }
-      }
+      },
+      "additionalProperties": false
     },
-    "strategy": { "type": "object" },
+    "strategy": {
+      "type": "object",
+      "properties": {
+        "type": { "enum": ["Recreate", "RollingUpdate"] },
+        "rollingUpdate": {
+          "type": "object",
+          "properties": {
+            "maxSurge": { "type": ["integer", "string"] },
+            "maxUnavailable": { "type": ["integer", "string"] }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
     "migrate": {
       "type": "object",
       "properties": {
         "enabled": { "type": "boolean" },
-        "backoffLimit": { "type": "integer" },
-        "activeDeadlineSeconds": { "type": "integer" },
+        "backoffLimit": { "type": "integer", "minimum": 0 },
+        "activeDeadlineSeconds": { "type": "integer", "minimum": 1 },
         "resources": { "type": "object" }
-      }
+      },
+      "additionalProperties": false
     },
     "seed": {
       "type": "object",
       "properties": {
         "enabled": { "type": "boolean" },
-        "activeDeadlineSeconds": { "type": "integer" },
+        "activeDeadlineSeconds": { "type": "integer", "minimum": 1 },
         "resources": { "type": "object" }
-      }
+      },
+      "additionalProperties": false
     },
     "autoscaling": {
       "type": "object",
@@ -246,6 +323,21 @@
         "targetCPUUtilizationPercentage": { "type": ["integer", "null"] },
         "targetMemoryUtilizationPercentage": { "type": ["integer", "null"] },
         "behavior": { "type": "object" }
+      },
+      "additionalProperties": false,
+      "if": { "properties": { "enabled": { "const": true } } },
+      "then": {
+        "$comment": "An HPA with no metrics is invalid; require at least one target.",
+        "anyOf": [
+          {
+            "properties": { "targetCPUUtilizationPercentage": { "type": "integer" } },
+            "required": ["targetCPUUtilizationPercentage"]
+          },
+          {
+            "properties": { "targetMemoryUtilizationPercentage": { "type": "integer" } },
+            "required": ["targetMemoryUtilizationPercentage"]
+          }
+        ]
       }
     },
     "pdb": {
@@ -253,7 +345,8 @@
       "properties": {
         "enabled": { "type": "boolean" },
         "minAvailable": { "type": ["integer", "string"] }
-      }
+      },
+      "additionalProperties": false
     },
     "serviceAccount": {
       "type": "object",
@@ -262,7 +355,8 @@
         "annotations": { "type": "object" },
         "name": { "type": "string" },
         "automount": { "type": "boolean" }
-      }
+      },
+      "additionalProperties": false
     },
     "podAnnotations": { "type": "object" },
     "podLabels": { "type": "object" },
@@ -278,7 +372,7 @@
   },
   "allOf": [
     {
-      "$comment": "External DB requires connection details unless bundled PG is on.",
+      "$comment": "External DB mode a needs host+password; mode b needs an existing Secret URL key; mode c needs host+existing Secret.",
       "if": {
         "properties": {
           "db": {
@@ -291,14 +385,45 @@
         }
       },
       "then": {
-        "properties": {
-          "db": {
-            "anyOf": [
-              { "properties": { "host": { "minLength": 1 } }, "required": ["host"] },
-              { "properties": { "existingSecret": { "minLength": 1 } }, "required": ["existingSecret"] }
-            ]
+        "anyOf": [
+          {
+            "properties": {
+              "db": {
+                "properties": {
+                  "host": { "minLength": 1 },
+                  "password": { "minLength": 1 },
+                  "existingSecret": { "maxLength": 0 }
+                },
+                "required": ["host", "password"]
+              }
+            }
+          },
+          {
+            "properties": {
+              "db": {
+                "properties": {
+                  "existingSecret": { "minLength": 1 },
+                  "existingSecretKeys": {
+                    "properties": { "url": { "minLength": 1 } },
+                    "required": ["url"]
+                  }
+                },
+                "required": ["existingSecret", "existingSecretKeys"]
+              }
+            }
+          },
+          {
+            "properties": {
+              "db": {
+                "properties": {
+                  "host": { "minLength": 1 },
+                  "existingSecret": { "minLength": 1 }
+                },
+                "required": ["host", "existingSecret"]
+              }
+            }
           }
-        }
+        ]
       }
     },
     {
@@ -331,10 +456,56 @@
       }
     },
     {
-      "$comment": "RWO local-disk persistence cannot roll multiple replicas.",
+      "$comment": "Multiple replicas, including HPA scale-out, require clustering and either Blob storage or persistent ReadWriteMany local storage.",
+      "if": {
+        "anyOf": [
+          { "properties": { "replicaCount": { "minimum": 2 } }, "required": ["replicaCount"] },
+          {
+            "properties": {
+              "autoscaling": {
+                "properties": {
+                  "enabled": { "const": true },
+                  "maxReplicas": { "minimum": 2 }
+                },
+                "required": ["enabled", "maxReplicas"]
+              }
+            }
+          }
+        ]
+      },
+      "then": {
+        "properties": {
+          "clustering": {
+            "properties": { "enabled": { "const": true } },
+            "required": ["enabled"]
+          },
+          "storage": {
+            "if": { "properties": { "adapter": { "const": "local_disk" } } },
+            "then": {
+              "properties": {
+                "localDisk": {
+                  "properties": {
+                    "persistence": {
+                      "properties": {
+                        "enabled": { "const": true },
+                        "accessModes": { "contains": { "const": "ReadWriteMany" } }
+                      },
+                      "required": ["enabled", "accessModes"]
+                    }
+                  },
+                  "required": ["persistence"]
+                }
+              },
+              "required": ["localDisk"]
+            }
+          }
+        }
+      }
+    },
+    {
+      "$comment": "A ReadWriteOnce local uploads PVC cannot safely attach to a surge pod during rolling updates.",
       "if": {
         "properties": {
-          "replicaCount": { "minimum": 2 },
           "storage": {
             "properties": {
               "adapter": { "const": "local_disk" },
@@ -343,21 +514,164 @@
                   "persistence": {
                     "properties": {
                       "enabled": { "const": true },
-                      "accessModes": {
-                        "contains": { "const": "ReadWriteOnce" }
-                      }
+                      "accessModes": { "not": { "contains": { "const": "ReadWriteMany" } } }
                     }
                   }
                 }
               }
             }
           }
-        },
-        "required": ["replicaCount"]
+        }
       },
       "then": {
-        "$comment": "Fail: use azure_blob, an RWX storage class, or replicaCount 1.",
-        "not": {}
+        "properties": {
+          "strategy": {
+            "anyOf": [
+              { "properties": { "type": { "const": "Recreate" } }, "required": ["type"] },
+              {
+                "properties": {
+                  "type": { "const": "RollingUpdate" },
+                  "rollingUpdate": {
+                    "properties": { "maxSurge": { "enum": [0, "0", "0%"] } },
+                    "required": ["maxSurge"]
+                  }
+                },
+                "required": ["type", "rollingUpdate"]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "$comment": "Azure Blob must have an account/container and a key source.",
+      "if": {
+        "properties": {
+          "storage": {
+            "properties": { "adapter": { "const": "azure_blob" } }
+          }
+        }
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "storage": {
+                "properties": {
+                  "azureBlob": {
+                    "properties": { "key": { "minLength": 1 } },
+                    "required": ["key"]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "storage": {
+                "properties": {
+                  "azureBlob": {
+                    "properties": { "existingSecret": { "minLength": 1 } },
+                    "required": ["existingSecret"]
+                  }
+                }
+              }
+            }
+          },
+          { "properties": { "extraEnvFrom": { "minItems": 1 } } },
+          {
+            "properties": {
+              "extraEnv": {
+                "contains": {
+                  "type": "object",
+                  "properties": { "name": { "const": "AZURE_STORAGE_KEY" } },
+                  "required": ["name"]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$comment": "An LLM credential is required, with external env mechanisms as explicit escape hatches.",
+      "anyOf": [
+        { "properties": { "llm": { "properties": { "apiKey": { "minLength": 1 } }, "required": ["apiKey"] } } },
+        { "properties": { "llm": { "properties": { "existingSecret": { "minLength": 1 } }, "required": ["existingSecret"] } } },
+        { "properties": { "envSecret": { "properties": { "AZURE_OPENAI_API_KEY": { "minLength": 1 } }, "required": ["AZURE_OPENAI_API_KEY"] } } },
+        { "properties": { "envSecret": { "properties": { "AZURE_API_KEY": { "minLength": 1 } }, "required": ["AZURE_API_KEY"] } } },
+        { "properties": { "extraEnvFrom": { "minItems": 1 } } },
+        {
+          "properties": {
+            "extraEnv": {
+              "contains": {
+                "type": "object",
+                "properties": { "name": { "enum": ["EDSPACE_LLM_API_KEY", "AZURE_OPENAI_API_KEY", "AZURE_API_KEY"] } },
+                "required": ["name"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "$comment": "MailPace is the only production mailer and its API key is required.",
+      "anyOf": [
+        { "properties": { "mailer": { "properties": { "mailpaceApiKey": { "minLength": 1 } }, "required": ["mailpaceApiKey"] } } },
+        { "properties": { "mailer": { "properties": { "existingSecret": { "minLength": 1 } }, "required": ["existingSecret"] } } },
+        { "properties": { "extraEnvFrom": { "minItems": 1 } } },
+        {
+          "properties": {
+            "extraEnv": {
+              "contains": {
+                "type": "object",
+                "properties": { "name": { "const": "MAILPACE_API_KEY" } },
+                "required": ["name"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "$comment": "Transactional email requires a verified sender address.",
+      "anyOf": [
+        { "properties": { "mailer": { "properties": { "fromEmail": { "minLength": 1 } }, "required": ["fromEmail"] } } },
+        { "properties": { "extraEnvFrom": { "minItems": 1 } } },
+        {
+          "properties": {
+            "extraEnv": {
+              "contains": {
+                "type": "object",
+                "properties": { "name": { "const": "MAILER_FROM_EMAIL" } },
+                "required": ["name"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "$comment": "Azure LLM deployments need an endpoint and all three deployment names.",
+      "if": {
+        "properties": {
+          "llm": {
+            "properties": { "provider": { "const": "azure" } }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "llm": {
+            "properties": {
+              "baseUrl": { "minLength": 1 },
+              "textDeployment": { "minLength": 1 },
+              "smallDeployment": { "minLength": 1 },
+              "embeddingDeployment": { "minLength": 1 }
+            },
+            "required": ["baseUrl", "textDeployment", "smallDeployment", "embeddingDeployment"]
+          }
+        }
       }
     }
   ]

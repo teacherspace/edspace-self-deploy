@@ -9,9 +9,21 @@ metadata:
     helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
   restartPolicy: Never
+  automountServiceAccountToken: false
+  # Mirrors the chart's default hardening so `helm test` also passes in
+  # PodSecurity "restricted" namespaces (busybox otherwise runs as root).
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
   containers:
     - name: health
       image: busybox:1.37
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: [ALL]
       command:
         - wget
         - -qO-

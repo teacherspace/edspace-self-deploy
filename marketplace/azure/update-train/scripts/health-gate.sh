@@ -27,11 +27,13 @@ echo "   /health OK"
 
 if [ -n "$EXPECTED_SHA" ]; then
   actual=$(curl -s --max-time 10 "https://${FQDN}/version" || true)
-  case "$actual" in
-    *"$EXPECTED_SHA"*) echo "   /version OK ($EXPECTED_SHA)" ;;
-    *)
-      echo "   /version mismatch: expected '$EXPECTED_SHA', got '$actual'" >&2
-      exit 1
-      ;;
-  esac
+  # Word-boundary match, not bare substring: the sha must not be embedded in
+  # a longer alphanumeric run, so a short sha cannot false-positive against
+  # unrelated response bytes.
+  if printf '%s' "$actual" | grep -qE "(^|[^0-9a-zA-Z])${EXPECTED_SHA}([^0-9a-zA-Z]|$)"; then
+    echo "   /version OK ($EXPECTED_SHA)"
+  else
+    echo "   /version mismatch: expected '$EXPECTED_SHA', got '$actual'" >&2
+    exit 1
+  fi
 fi

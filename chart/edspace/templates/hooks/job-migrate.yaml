@@ -1,10 +1,7 @@
 {{- /*
-Database migrations as a Helm hook: a failed migration aborts the upgrade
-while the old pods keep serving. The app also migrates on boot (advisory-lock
-safe), so the boot-time re-run is a no-op.
-
-With the bundled Postgres the job only runs pre-UPGRADE: on first install the
-database StatefulSet does not exist yet — boot-time migration covers it.
+Database migrations as a pre-upgrade Helm hook: a failed migration aborts the
+upgrade while the old pods keep serving. On first install, the app migrates at
+boot so all release-owned Secrets and ConfigMaps can follow a normal lifecycle.
 */}}
 {{- if .Values.migrate.enabled }}
 apiVersion: batch/v1
@@ -14,17 +11,15 @@ metadata:
   labels:
     {{- include "edspace.labels" . | nindent 4 }}
   annotations:
-    {{- if .Values.db.bundled.enabled }}
     helm.sh/hook: pre-upgrade
-    {{- else }}
-    helm.sh/hook: pre-install,pre-upgrade
-    {{- end }}
     helm.sh/hook-weight: "0"
-    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
 spec:
   backoffLimit: {{ .Values.migrate.backoffLimit }}
   activeDeadlineSeconds: {{ .Values.migrate.activeDeadlineSeconds }}
-  ttlSecondsAfterFinished: 3600
+  # Keep failed Jobs briefly for diagnosis, then let the TTL controller
+  # remove them (successful runs are deleted by the hook policy).
+  ttlSecondsAfterFinished: 600
   template:
     metadata:
       labels:
@@ -32,6 +27,7 @@ spec:
         app.kubernetes.io/component: migrate
     spec:
       restartPolicy: Never
+      automountServiceAccountToken: false
       {{- include "edspace.imagePullSecrets" . | nindent 6 }}
       {{- with .Values.podSecurityContext }}
       securityContext:
@@ -47,6 +43,8 @@ spec:
             {{- toYaml . | nindent 12 }}
           {{- end }}
           env:
+            {{- include "edspace.migrationInlineConfigEnv" . | nindent 12 }}
+            {{- include "edspace.sharedEnv" . | nindent 12 }}
             # Small pool; no Chromium — migrations don't render PDFs.
             - name: POOL_SIZE
               value: "2"
@@ -54,12 +52,12 @@ spec:
               value: "1"
             - name: PDF_ENABLED
               value: "false"
-            {{- include "edspace.sharedEnv" . | nindent 12 }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
           envFrom:
-            - configMapRef:
-                name: {{ include "edspace.fullname" . }}-hook-env
             - secretRef:
-                name: {{ include "edspace.fullname" . }}-hook-env
+                name: {{ include "edspace.fullname" . }}-migrate-env
             {{- with .Values.extraEnvFrom }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

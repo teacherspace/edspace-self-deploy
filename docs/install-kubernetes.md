@@ -39,11 +39,20 @@ llm:
 mailer:
   fromEmail: noreply@example.org
   mailpaceApiKey: <mailpace-token>
+
+env:
+  EDSPACE_SPEECH_ENABLED: "false"
+
+# Evaluation without a pre-created TLS Secret. Put TLS in front before public use.
+ingress:
+  tls:
+    enabled: false
 ```
 
 ```sh
 helm install edspace oci://registry.edspace.io/edspace/charts/edspace \
-  --version <chart-version> -n edspace --create-namespace -f values.eval.yaml
+  --version <chart-version> -n edspace --create-namespace -f values.eval.yaml \
+  --wait --timeout 15m
 helm test edspace -n edspace
 ```
 
@@ -64,14 +73,22 @@ helm upgrade edspace oci://registry.edspace.io/edspace/charts/edspace \
   --version <new-version> -n edspace -f values.yaml
 ```
 
-Database migrations run in a pre-upgrade hook Job before pods roll; a failed migration aborts the upgrade while old pods keep serving. See [operations.md](operations.md).
+Database migrations run at app boot on first install. Upgrades run them in a
+pre-upgrade hook Job before pods roll; a failed migration aborts the upgrade
+while old pods keep serving. See [operations.md](operations.md).
 
 ## Seeding demo data
 
 ```sh
-helm upgrade edspace ... --set seed.enabled=true   # runs once post-install
+helm upgrade edspace ... --reuse-values --set seed.enabled=true
+# after the Job succeeds, turn it off again — it re-runs on every
+# install/upgrade while enabled:
+helm upgrade edspace ... --reuse-values --set seed.enabled=false
 ```
 
 ## Uninstall
 
-`helm uninstall edspace -n edspace`. The generated-secrets Secret, PVCs and the bundled-Postgres volume are kept; delete them explicitly if you mean it.
+`helm uninstall edspace -n edspace`. The generated application Secret, bundled
+Postgres password Secret, and PVCs are kept; delete them explicitly if you mean
+to destroy the data. Registry and ordinary configuration Secrets are removed
+with the release.

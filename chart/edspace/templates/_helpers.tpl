@@ -34,6 +34,16 @@ app.kubernetes.io/name: {{ include "edspace.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
+{{/*
+App-pod selector: selectorLabels alone also match the bundled Postgres and
+hook Job pods (they add their own component label), so anything that must
+target ONLY the app pods (Deployment, Services, PDB) selects on this.
+*/}}
+{{- define "edspace.appSelectorLabels" -}}
+{{ include "edspace.selectorLabels" . }}
+app.kubernetes.io/component: app
+{{- end }}
+
 {{- define "edspace.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
 {{- default (include "edspace.fullname" .) .Values.serviceAccount.name }}
@@ -281,5 +291,36 @@ AZURE_STORAGE_KEY: {{ .Values.storage.azureBlob.key | quote }}
 {{- end }}
 {{- range $k, $v := .Values.envSecret }}
 {{ $k }}: {{ $v | toString | quote }}
+{{- end }}
+{{- end }}
+
+{{/*
+Non-secret config as explicit migration-Job env entries. Pre-upgrade hooks run
+before release resources are updated, so the Job cannot reference the release
+ConfigMap/Secret (it would see the previous revision's values). Secret data
+takes the same fresh-values route via the hook-scoped -migrate-env Secret
+(secret-migrate-env.yaml) instead of inline values, keeping credentials out of
+the pod spec.
+*/}}
+{{- define "edspace.migrationInlineConfigEnv" -}}
+{{- $config := include "edspace.envConfigData" . | fromYaml | default dict }}
+{{- range $name := keys $config | sortAlpha }}
+{{- if not (has $name (list "PDF_ENABLED" "POOL_COUNT" "POOL_SIZE")) }}
+- name: {{ $name }}
+  value: {{ get $config $name | toString | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
+
+{{/* Cross-field checks JSON Schema cannot express. */}}
+{{- define "edspace.validateValues" -}}
+{{- if and .Values.autoscaling.enabled (gt (int .Values.autoscaling.minReplicas) (int .Values.autoscaling.maxReplicas)) }}
+{{- fail "autoscaling.minReplicas must be less than or equal to autoscaling.maxReplicas" }}
+{{- end }}
+{{- $plain := .Values.env | default dict }}
+{{- range $name := keys (.Values.envSecret | default dict) }}
+{{- if hasKey $plain $name }}
+{{- fail (printf "%s must not be set in both env and envSecret" $name) }}
+{{- end }}
 {{- end }}
 {{- end }}

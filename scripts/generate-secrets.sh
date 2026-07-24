@@ -1,6 +1,11 @@
 #!/usr/bin/env sh
 # Prints the app's required random secrets in .env format.
 # Usage: scripts/generate-secrets.sh >> compose/.env
+#
+# Not idempotent: appending a second time adds duplicate keys (docker compose
+# uses the last occurrence, so new values win — including POSTGRES_PASSWORD,
+# which cannot be changed this way once the database volume is initialized;
+# see docs/install-compose.md).
 set -eu
 
 printf 'SECRET_KEY_BASE=%s\n' "$(openssl rand -base64 64 | tr -d '\n=' | cut -c1-64)"

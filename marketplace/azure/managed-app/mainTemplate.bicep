@@ -27,14 +27,16 @@ param tags object = {}
 @description('standard = 1 vCPU / 2 GiB, large = 2 vCPU / 4 GiB.')
 param appSize string = 'standard'
 
-@description('App image. TODO(edspace): pin the tag per managed-app definition version; the update train moves instances forward.')
-param containerImage string = 'registry.edspace.io/edspace/edspace:latest'
+@description('App image pinned by build.sh for each managed-app definition version; the update train moves instances forward.')
+param containerImage string = '__EDSPACE_CONTAINER_IMAGE__'
 
 // ------------------------------------------------------------------ database
 param pgSkuName string = 'Standard_B2s'
 param pgSkuTier string = 'Burstable'
+// Upper bound is the platform maximum, NOT the UI's: storage auto-grows, and
+// update-train template redeploys pass the server's CURRENT size back in.
 @minValue(32)
-@maxValue(1024)
+@maxValue(32767)
 param pgStorageGB int = 32
 
 // ------------------------------------------------------------------- storage
@@ -98,13 +100,10 @@ param tokenSigningSeed string = newGuid()
 @secure()
 param pgPasswordSeed string = newGuid()
 
-// TODO(edspace): publisher operations GROUP object id (from the publisher
-// tenant) for break-glass Key Vault access. Must match an authorization on
-// the managed-app definition.
-param publisherOpsGroupObjectId string = '00000000-0000-0000-0000-000000000000'
-
 // ------------------------------------------------------------------- naming
 var suffix = uniqueString(resourceGroup().id) // stable per instance -> idempotent re-deploys
+// Exact, publisher-owned discovery marker. Customer-supplied tags are retained.
+var resourceTags = union(tags, { 'edspace.io/product': 'edspace' })
 
 var logAnalyticsName = 'log-edspace-${suffix}'
 var acaEnvName = 'cae-edspace-${suffix}'
@@ -118,7 +117,7 @@ var storageContainerName = 'uploads'
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
   name: logAnalyticsName
   location: location
-  tags: tags
+  tags: resourceTags
   properties: {
     sku: { name: 'PerGB2018' }
     retentionInDays: 30
@@ -128,7 +127,7 @@ resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
 resource acaEnv 'Microsoft.App/managedEnvironments@2025-01-01' = {
   name: acaEnvName
   location: location
-  tags: tags
+  tags: resourceTags
   properties: {
     appLogsConfiguration: {
       destination: 'log-analytics'
@@ -153,7 +152,7 @@ resource acaEnv 'Microsoft.App/managedEnvironments@2025-01-01' = {
 resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   name: storageAccountName
   location: location
-  tags: tags
+  tags: resourceTags
   kind: 'StorageV2'
   sku: { name: storageSku }
   properties: {
@@ -190,7 +189,7 @@ resource uploadsContainer 'Microsoft.Storage/storageAccounts/blobServices/contai
 resource aiAccount 'Microsoft.CognitiveServices/accounts@2025-09-01' = if (enableAzureAi) {
   name: aiAccountName
   location: aiLocation
-  tags: tags
+  tags: resourceTags
   kind: 'AIServices'
   sku: { name: 'S0' }
   identity: { type: 'SystemAssigned' }
@@ -239,21 +238,19 @@ resource aiModelDeployments 'Microsoft.CognitiveServices/accounts/deployments@20
 resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' = {
   name: keyVaultName
   location: location
-  tags: tags
+  tags: resourceTags
   properties: {
     sku: { family: 'A', name: 'standard' }
     tenantId: subscription().tenantId
     enabledForTemplateDeployment: true // required for getSecret() below
     enableSoftDelete: true
+    enablePurgeProtection: true // the vault holds every instance secret; purge would be unrecoverable
     softDeleteRetentionInDays: 90
     enableRbacAuthorization: false
-    accessPolicies: [
-      {
-        tenantId: subscription().tenantId
-        objectId: publisherOpsGroupObjectId
-        permissions: { secrets: ['get', 'list'] }
-      }
-    ]
+    // Publisher authorization is control-plane access on the managed RG.
+    // Do not grant a publisher-tenant principal permanent customer-vault data
+    // access: Key Vault callers must be registered in the vault's tenant.
+    accessPolicies: []
   }
 }
 
@@ -305,7 +302,7 @@ module postgres 'modules/postgres.bicep' = {
   params: {
     serverName: pgServerName
     location: location
-    tags: tags
+    tags: resourceTags
     skuName: pgSkuName
     skuTier: pgSkuTier
     storageSizeGB: pgStorageGB
@@ -325,7 +322,7 @@ module app 'modules/containerApp.bicep' = {
   name: 'edspace-app'
   params: {
     location: location
-    tags: tags
+    tags: resourceTags
     environmentId: acaEnv.id
     containerImage: containerImage
     appSize: appSize

@@ -2,9 +2,10 @@
 
 # Environment variable reference
 
-Variables the app reads, grouped by area. `Secret` variables belong in
-secret storage (`envSecret` / Kubernetes Secrets / password fields),
-never in plain config.
+Variables read by the app — plus the deployment-layer settings in the
+final section — grouped by area. `Secret` variables belong in secret
+storage (`envSecret` / Kubernetes Secrets / password fields), never in
+plain config.
 
 Variables marked *managed* are composed by the deployment packaging
 (chart, compose, managed app) and should not be set by hand.
@@ -31,7 +32,7 @@ Variables marked *managed* are composed by the deployment packaging
 
 | Variable | Required | Default | Secret | Description |
 |---|---|---|---|---|
-| `EDSPACE_FILE_STORAGE_ADAPTER` | no | local_disk |  | Attachment storage backend. "local_disk" stores under EDSPACE_FILE_STORAGE_ROOT (needs a persistent volume); "azure_blob" requires AZURE_STORAGE_ACCOUNT/CONTAINER/KEY — if any of the three is missing the app silently falls back to local disk. |
+| `EDSPACE_FILE_STORAGE_ADAPTER` | no | local_disk |  | Attachment storage backend. "local_disk" stores under EDSPACE_FILE_STORAGE_ROOT (needs a persistent volume); "azure_blob" requires AZURE_STORAGE_ACCOUNT/CONTAINER/KEY — if any of the three is missing the app silently falls back to local disk. One of: `local_disk`, `azure_blob`. |
 | `EDSPACE_FILE_STORAGE_ROOT` | no | priv/uploads |  | Root directory for the local_disk adapter. |
 | `AZURE_STORAGE_ACCOUNT` | no |  |  | Azure Blob storage account name (azure_blob adapter). |
 | `AZURE_STORAGE_CONTAINER` | no |  |  | Azure Blob container for uploads (must already exist). |
@@ -41,7 +42,7 @@ Variables marked *managed* are composed by the deployment packaging
 
 | Variable | Required | Default | Secret | Description |
 |---|---|---|---|---|
-| `EDSPACE_LLM_PROVIDER` | no | azure |  | LLM provider used for chat, generation and embeddings. |
+| `EDSPACE_LLM_PROVIDER` | no | azure |  | LLM provider used for chat, generation and embeddings. One of: `azure`, `openai`, `anthropic`, `google`, `groq`, `mistral`, `openrouter`, `deepseek`, `deepinfra`, `cerebras`, `xai`, `amazon_bedrock`. |
 | `EDSPACE_LLM_API_KEY` | yes |  | yes | API key for the configured LLM provider. Effectively required — the product's core features depend on it. (The Azure-style fallbacks AZURE_OPENAI_API_KEY / AZURE_API_KEY are also honoured.) |
 | `EDSPACE_LLM_BASE_URL` | no |  |  | Provider base URL. Required for azure (your Azure OpenAI / AI Foundry endpoint); usually left empty for public providers. |
 | `EDSPACE_LLM_API_VERSION` | no |  |  | Azure OpenAI API version, when the provider is azure. |
@@ -70,7 +71,7 @@ Variables marked *managed* are composed by the deployment packaging
 
 | Variable | Required | Default | Secret | Description |
 |---|---|---|---|---|
-| `MAILER_FROM_EMAIL` | no |  |  | From address for transactional email. Must be a sender verified in your MailPace account. |
+| `MAILER_FROM_EMAIL` | yes |  |  | From address for transactional email. Must be a sender verified in your MailPace account. |
 | `MAILER_FROM_NAME` | no | EdSpace |  | From display name for transactional email. |
 | `MAILPACE_API_KEY` | yes |  | yes | MailPace API token. Required — the app refuses to boot in production without it. MailPace is currently the only supported email provider (see docs/limitations.md). |
 
@@ -132,9 +133,9 @@ Variables marked *managed* are composed by the deployment packaging
 | Variable | Required | Default | Secret | Description |
 |---|---|---|---|---|
 | `POSTGRES_PASSWORD` | compose |  | yes | Password for the bundled Postgres (compose only). Feeds the composed DATABASE_URL. Generate with scripts/generate-secrets.sh. |
-| `EDSPACE_IMAGE` | no |  |  | App image reference (compose only). |
-| `EDSPACE_IMAGE_TAG` | no |  |  | App image tag (compose only). Pin to a release tag. |
-| `EDSPACE_PORT` | no |  |  | Host port the app is published on (compose only). |
+| `EDSPACE_IMAGE` | no | registry.edspace.io/edspace/edspace |  | App image reference (compose only). |
+| `EDSPACE_IMAGE_TAG` | compose |  |  | App image tag (compose only). Pin to a release tag. |
+| `EDSPACE_PORT` | no | 4000 |  | Host port the app is published on (compose only). |
 
 ## Internal tuning variables
 

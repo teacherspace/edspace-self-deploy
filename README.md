@@ -28,19 +28,26 @@ helm install edspace oci://registry.edspace.io/edspace/charts/edspace \
   --set registryCredentials.password=<token> \
   --set db.bundled.enabled=true \
   --set llm.apiKey=<llm-api-key> \
+  --set llm.baseUrl=https://<your-endpoint>.cognitiveservices.azure.com/ \
+  --set llm.textDeployment=gpt-5.4 \
+  --set llm.smallDeployment=gpt-5-mini \
+  --set llm.embeddingDeployment=text-embedding-3-small \
   --set mailer.mailpaceApiKey=<mailpace-key> \
-  --set mailer.fromEmail=noreply@example.org
+  --set mailer.fromEmail=noreply@example.org \
+  --set ingress.tls.enabled=false \
+  --wait --timeout 15m
 ```
 
-For production, use external Postgres and explicit secrets — see [docs/install-kubernetes.md](docs/install-kubernetes.md).
+This evaluation command uses HTTP ingress. Configure TLS, external Postgres,
+and explicit secrets before production — see [docs/install-kubernetes.md](docs/install-kubernetes.md).
 
 ## Quickstart (Compose)
 
 ```sh
 cd compose
 cp .env.example .env
-../scripts/generate-secrets.sh >> .env   # fills SECRET_KEY_BASE etc.
-$EDITOR .env                              # set PHX_HOST, LLM + MailPace keys, POSTGRES_PASSWORD
+../scripts/generate-secrets.sh >> .env   # fills SECRET_KEY_BASE, POSTGRES_PASSWORD etc.
+$EDITOR .env                              # set PHX_HOST, EDSPACE_IMAGE_TAG, LLM + MailPace keys
 docker compose up -d
 ```
 
@@ -70,11 +77,14 @@ docs/                    Install and operations documentation.
 Generated files are committed; regenerate with `make gen` and CI enforces freshness (`make check`).
 
 ```sh
-make gen       # regenerate .env.example / values.schema.json / docs/env-vars.md
-make check     # verify generated files are current (CI)
-make lint      # helm lint against all ci/ value sets
-make template  # render chart with default ci values
-make package   # helm package to dist/
+make gen              # regenerate .env.example / values.schema.json / docs/env-vars.md
+make check            # verify generated files are current (CI)
+make lint             # helm lint against all ci/ value sets
+make test-validation  # chart value-guard test suite
+make template         # render chart with default ci values
+make package          # helm package to dist/
+make bicep            # build the Azure managed-app template
+make compose-config   # validate compose.yaml with example env
 ```
 
 Versioning: the repo git tag equals the chart version (semver). `Chart.yaml`'s `appVersion` records the app image tag the release was validated against and is the chart's default image tag. See `CHANGELOG.md` for per-release app compatibility.

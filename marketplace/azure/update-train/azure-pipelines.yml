@@ -6,14 +6,9 @@
 # cannot rotate secrets, no template parameters needed. Infra changes use
 # scripts/update-instance.sh --template with bootstrapSecrets=false.
 #
-# TODO(edspace): cross-tenant auth. The service connections below must be able
-# to obtain tokens in each CUSTOMER tenant (the managed-app authorization
-# grants the publisher principal rights on the managed RG, but CI still needs
-# a token from that tenant). Spike options:
-#   a) multi-tenant app registration, consented per customer at onboarding
-#      (assumed here: one service connection, per-instance tenantId login)
-#   b) Azure Lighthouse delegation
-#   c) interactive operator runs for early customers
+# The service connection authenticates in the publisher tenant. Its principal
+# (or a group containing it) must be a Partner Center authorization for the
+# managed-app plan, which projects access to every customer managed RG.
 
 trigger: none # manual only
 
@@ -28,6 +23,13 @@ parameters:
     displayName: "Image registry/repository"
     type: string
     default: registry.edspace.io/edspace/edspace
+  - name: azureServiceConnection
+    displayName: "Publisher-tenant Azure service connection"
+    type: string
+    default: edspace-updatetrain
+  - name: publisherTenantId
+    displayName: "Publisher Microsoft Entra tenant ID"
+    type: string
 
 variables:
   - name: instancesFile
@@ -44,12 +46,13 @@ stages:
           - task: AzureCLI@2
             displayName: "Update + health-gate canary ring"
             inputs:
-              azureSubscription: edspace-updatetrain # TODO(edspace): service connection
+              azureSubscription: ${{ parameters.azureServiceConnection }}
               scriptType: bash
               scriptLocation: inlineScript
               inlineScript: |
                 set -euo pipefail
                 cd "$(Build.SourcesDirectory)"
+                export EDSPACE_PUBLISHER_TENANT_ID="${{ parameters.publisherTenantId }}"
                 marketplace/azure/update-train/scripts/update-instance.sh \
                   --ring canary \
                   --instances "$(instancesFile)" \
@@ -73,12 +76,13 @@ stages:
                 - task: AzureCLI@2
                   displayName: "Update + health-gate broad ring"
                   inputs:
-                    azureSubscription: edspace-updatetrain # TODO(edspace)
+                    azureSubscription: ${{ parameters.azureServiceConnection }}
                     scriptType: bash
                     scriptLocation: inlineScript
                     inlineScript: |
                       set -euo pipefail
                       cd "$(Build.SourcesDirectory)"
+                      export EDSPACE_PUBLISHER_TENANT_ID="${{ parameters.publisherTenantId }}"
                       marketplace/azure/update-train/scripts/update-instance.sh \
                         --ring broad \
                         --instances "$(instancesFile)" \

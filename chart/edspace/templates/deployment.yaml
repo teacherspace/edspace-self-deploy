@@ -1,3 +1,4 @@
+{{- include "edspace.validateValues" . }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -9,10 +10,14 @@ spec:
   replicas: {{ .Values.replicaCount }}
   {{- end }}
   strategy:
-    {{- toYaml .Values.strategy | nindent 4 }}
+    type: {{ .Values.strategy.type }}
+    {{- if eq .Values.strategy.type "RollingUpdate" }}
+    rollingUpdate:
+      {{- toYaml .Values.strategy.rollingUpdate | nindent 6 }}
+    {{- end }}
   selector:
     matchLabels:
-      {{- include "edspace.selectorLabels" . | nindent 6 }}
+      {{- include "edspace.appSelectorLabels" . | nindent 6 }}
   template:
     metadata:
       annotations:
@@ -23,7 +28,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
       labels:
-        {{- include "edspace.selectorLabels" . | nindent 8 }}
+        {{- include "edspace.appSelectorLabels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -49,6 +54,9 @@ spec:
           {{- end }}
           ports:
             # PORT is fixed by the image (4000); see the env-var contract.
+            # The chart sets no command: it relies on the image entrypoint
+            # (bin/server), which exports PHX_SERVER=true and migrates before
+            # binding. A different entrypoint boots without an HTTP server.
             - name: http
               containerPort: 4000
               protocol: TCP

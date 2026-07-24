@@ -50,6 +50,35 @@ PRODUCED_VARS = {
     "PORT": "app image ENV (matches chart targetPort / compose port)",
 }
 
+# These variables have dedicated chart values because templates compose them,
+# create resources for them, or route them to specific Secrets. Allowing the
+# same names in env/envSecret would render duplicate YAML keys with ambiguous
+# precedence, so the generated schema rejects that configuration.
+CHART_STRUCTURED_VARS = {
+    "PHX_HOST",
+    "PHX_CHECK_ORIGIN",
+    "SECRET_KEY_BASE",
+    "TOKEN_SIGNING_SECRET",
+    "EDSPACE_FILE_STORAGE_ADAPTER",
+    "EDSPACE_FILE_STORAGE_ROOT",
+    "AZURE_STORAGE_ACCOUNT",
+    "AZURE_STORAGE_CONTAINER",
+    "AZURE_STORAGE_KEY",
+    "EDSPACE_LLM_PROVIDER",
+    "EDSPACE_LLM_API_KEY",
+    "EDSPACE_LLM_BASE_URL",
+    "EDSPACE_LLM_API_VERSION",
+    "EDSPACE_LLM_TEXT_MODEL",
+    "EDSPACE_LLM_TEXT_DEPLOYMENT",
+    "EDSPACE_LLM_SMALL_MODEL",
+    "EDSPACE_LLM_SMALL_DEPLOYMENT",
+    "EDSPACE_LLM_EMBEDDING_MODEL",
+    "EDSPACE_LLM_EMBEDDING_DEPLOYMENT",
+    "MAILER_FROM_EMAIL",
+    "MAILER_FROM_NAME",
+    "MAILPACE_API_KEY",
+}
+
 GENERATED_BANNER = "GENERATED FILE - edit config/contract.yaml and run `make gen`."
 
 
@@ -97,6 +126,9 @@ def load_contract() -> tuple[list[dict], list[dict]]:
                 f"{name}: source={v['source']} but no producer registered in gen.py"
             )
 
+    for name in sorted(CHART_STRUCTURED_VARS - seen):
+        errors.append(f"{name}: chart structured var is missing from the contract")
+
     if errors:
         raise ContractError("contract.yaml invalid:\n  " + "\n  ".join(errors))
     return categories, variables
@@ -134,8 +166,9 @@ def gen_env_example(categories: list[dict], variables: list[dict]) -> str:
         f"# {GENERATED_BANNER}",
         "# Environment template for the Docker Compose deployment.",
         "#",
-        "# Uncommented entries are the settings most installs need to review;",
-        "# commented entries show optional settings with their defaults.",
+        "# Uncommented entries are required; commented entries are optional",
+        "# settings shown with their defaults. The app treats a set-but-empty",
+        "# variable as SET, so only uncomment a line when giving it a value.",
         "# See docs/env-vars.md for the full reference.",
     ]
     for cat in categories:
@@ -156,10 +189,13 @@ def gen_env_example(categories: list[dict], variables: list[dict]) -> str:
             if required_for(v, "compose"):
                 lines.append("# Required.")
             default = default_for(v, "compose")
-            if v["tier"] == "core":
+            if v.get("example") and not default:
+                lines.append(f"# Example: {v['example']}")
+            # Only required vars render uncommented: env_file passes empty
+            # values as SET (""), and the app does not treat "" as absent —
+            # a blank optional line would enable half-configured features.
+            if required_for(v, "compose"):
                 value = "" if v.get("secret") else (default or "")
-                if v.get("example") and not default:
-                    lines.append(f"# Example: {v['example']}")
                 lines.append(f"{v['name']}={value}")
             else:
                 lines.append(f"# {v['name']}={default or ''}")
@@ -184,8 +220,22 @@ def gen_env_example(categories: list[dict], variables: list[dict]) -> str:
 def json_type_for(v: dict) -> dict:
     # Env values arrive as strings in YAML but users may write bare ints/bools;
     # accept the logical type or its string form.
-    logical = {"string": "string", "integer": "integer", "boolean": "boolean", "enum": "string"}[v["type"]]
-    schema: dict = {"type": [logical, "string"] if logical != "string" else "string"}
+    if v["type"] == "integer":
+        schema: dict = {
+            "anyOf": [
+                {"type": "integer"},
+                {"type": "string", "pattern": "^-?[0-9]+$"},
+            ]
+        }
+    elif v["type"] == "boolean":
+        schema = {
+            "anyOf": [
+                {"type": "boolean"},
+                {"type": "string", "enum": ["true", "false"]},
+            ]
+        }
+    else:
+        schema = {"type": "string"}
     if v.get("enum"):
         schema["enum"] = list(v["enum"])
     desc = " ".join(v["description"].split())
@@ -200,30 +250,58 @@ def gen_values_schema(variables: list[dict]) -> str:
     env_props: dict = {}
     env_secret_props: dict = {}
     for v in variables:
-        if v["category"] == "deploy" or v["source"] != "user":
+        name = v["name"]
+        if v["source"] in ("computed", "fixed"):
+            managed = {
+                "not": {},
+                "description": f"{name} is composed by the deployment packaging - never set it directly.",
+            }
+            env_props[name] = managed
+            env_secret_props[name] = managed
+            continue
+        if v["category"] == "deploy":
+            deploy_only = {
+                "not": {},
+                "description": f"{name} is a compose-only deployment setting, not read by the app.",
+            }
+            env_props[name] = deploy_only
+            env_secret_props[name] = deploy_only
+            continue
+        if name in CHART_STRUCTURED_VARS:
+            structured = {
+                "not": {},
+                "description": f"{name} has a dedicated structured chart value; do not duplicate it in env/envSecret.",
+            }
+            env_props[name] = structured
+            env_secret_props[name] = structured
             continue
         if v["secret"]:
-            env_secret_props[v["name"]] = json_type_for(v)
+            env_secret_props[name] = json_type_for(v)
             # Placing a secret in the plain env map is always a mistake.
-            env_props[v["name"]] = {
+            env_props[name] = {
                 "not": {},
-                "description": f"{v['name']} is a secret - set it under envSecret (or the matching structured value) instead.",
+                "description": f"{name} is a secret - set it under envSecret (or the matching structured value) instead.",
             }
         else:
-            env_props[v["name"]] = json_type_for(v)
+            env_props[name] = json_type_for(v)
+            # Routing a non-secret through the Secret is harmless and
+            # occasionally wanted (values considered sensitive locally).
+            env_secret_props[name] = json_type_for(v)
 
     props = base.setdefault("properties", {})
+    # additionalProperties: false makes unknown names (typos) install-time
+    # errors; variables outside the contract go through extraEnv/extraEnvFrom.
     props["env"] = {
         "type": "object",
-        "description": "Extra non-secret environment variables (rendered into the app ConfigMap).",
+        "description": "Extra non-secret environment variables from the app contract (rendered into the app ConfigMap). Unknown names are rejected - use extraEnv/extraEnvFrom for variables outside the contract.",
         "properties": env_props,
-        "additionalProperties": {"type": ["string", "integer", "boolean"]},
+        "additionalProperties": False,
     }
     props["envSecret"] = {
         "type": "object",
-        "description": "Extra secret environment variables (rendered into the app Secret).",
+        "description": "Extra secret environment variables from the app contract (rendered into the app Secret). Unknown names are rejected - use extraEnvFrom for secrets outside the contract.",
         "properties": env_secret_props,
-        "additionalProperties": {"type": ["string", "integer", "boolean"]},
+        "additionalProperties": False,
     }
     return json.dumps(base, indent=2, sort_keys=False) + "\n"
 
@@ -239,9 +317,10 @@ def gen_docs(categories: list[dict], variables: list[dict]) -> str:
         "",
         "# Environment variable reference",
         "",
-        "Variables the app reads, grouped by area. `Secret` variables belong in",
-        "secret storage (`envSecret` / Kubernetes Secrets / password fields),",
-        "never in plain config.",
+        "Variables read by the app — plus the deployment-layer settings in the",
+        "final section — grouped by area. `Secret` variables belong in secret",
+        "storage (`envSecret` / Kubernetes Secrets / password fields), never in",
+        "plain config.",
         "",
         "Variables marked *managed* are composed by the deployment packaging",
         "(chart, compose, managed app) and should not be set by hand.",
@@ -265,10 +344,13 @@ def gen_docs(categories: list[dict], variables: list[dict]) -> str:
                 req_s = "yes" if req else "no"
             if v["source"] in ("computed", "fixed"):
                 req_s = "*managed*"
-            default = default_for(v, "app") or ""
+            # Deploy-tier vars have no app default; fall back to the compose one.
+            default = default_for(v, "app") or default_for(v, "compose") or ""
             desc = " ".join(v["description"].split())
             if v.get("notes"):
                 desc += " " + " ".join(v["notes"].split())
+            if v["type"] == "enum":
+                desc += " One of: " + ", ".join(f"`{e}`" for e in v["enum"]) + "."
             lines.append(
                 f"| `{v['name']}` | {req_s} | {md_escape(default)} | "
                 f"{'yes' if v['secret'] else ''} | {md_escape(desc)} |"

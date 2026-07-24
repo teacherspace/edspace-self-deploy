@@ -39,11 +39,13 @@ db:
     # -- Run an in-cluster Postgres (pgvector). EVALUATION ONLY — no backups,
     # no replication. Use an external managed Postgres in production.
     enabled: false
-    # -- Postgres image; must provide the pgvector extension.
-    image: pgvector/pgvector:pg16
+    # -- Postgres image; must provide the pgvector extension. Pinned to a
+    # released pgvector version — keep the pin when overriding.
+    image: pgvector/pgvector:0.8.5-pg16
     database: edspace
     username: edspace
-    # -- Superuser password. Empty = generated on first install and kept.
+    # -- Superuser password for first install. Empty = generated. The retained
+    # Secret wins on upgrades/reinstalls so changing this cannot desync the DB.
     password: ""
     persistence:
       size: 10Gi
@@ -144,8 +146,11 @@ mailer:
   existingSecret: ""
   existingSecretKey: mailpace-api-key
 
-# -- Extra non-secret env vars (validated against the app contract).
-env: {}
+# -- Extra non-secret env vars (validated against the app contract). Speech is
+# disabled by default in self-deploy because it needs separate Azure Speech
+# credentials; set true plus AZURE_SPEECH_KEY/REGION to enable it.
+env:
+  EDSPACE_SPEECH_ENABLED: "false"
 # -- Extra secret env vars (validated; rendered into the app Secret).
 envSecret: {}
 # -- Raw envFrom entries (customer-managed ConfigMaps/Secrets, ESO, CSI...).
@@ -222,12 +227,14 @@ lifecycle:
 strategy:
   type: RollingUpdate
   rollingUpdate:
-    maxSurge: 1
-    maxUnavailable: 0
+    # -- Zero surge is required by the default ReadWriteOnce uploads PVC.
+    # Blob/RWX installs can override to maxSurge: 1, maxUnavailable: 0.
+    maxSurge: 0
+    maxUnavailable: 1
 
 migrate:
-  # -- Run migrations as a pre-upgrade (and pre-install with external DB) Job
-  # so a failed migration aborts before pods roll.
+  # -- Run migrations as a pre-upgrade Job so a failed migration aborts before
+  # pods roll. First install migrates at app boot.
   enabled: true
   backoffLimit: 3
   activeDeadlineSeconds: 600
@@ -236,7 +243,8 @@ migrate:
     limits: { memory: 512Mi }
 
 seed:
-  # -- One-time demo/seed data Job (post-install only).
+  # -- Demo/seed data Job (post-install AND post-upgrade). Re-runs on every
+  # upgrade while enabled — disable again after seeding.
   enabled: false
   activeDeadlineSeconds: 900
   resources:

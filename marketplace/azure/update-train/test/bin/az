@@ -1,0 +1,115 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+has_arg() {
+  local wanted=$1
+  shift
+  for arg in "$@"; do [ "$arg" != "$wanted" ] || return 0; done
+  return 1
+}
+
+case "${1:-} ${2:-}" in
+  "account show" )
+    printf '%s\n' "${EDSPACE_PUBLISHER_TENANT_ID:?}"
+    ;;
+  "account set" )
+    ;;
+  "containerapp show" )
+    if has_arg --query "$@"; then
+      printf '%s\n' 'registry.edspace.io/edspace/edspace:v1.0.0'
+    else
+      cat <<'JSON'
+{
+  "tags": {"edspace.io/product": "edspace", "owner": "customer"},
+  "properties": {
+    "configuration": {
+      "ingress": {"fqdn": "pilot.example.test"},
+      "registries": [{"server": "registry.edspace.io", "username": "customer-registry-user"}]
+    },
+    "template": {
+      "containers": [{
+        "image": "registry.edspace.io/edspace/edspace:v1.0.0",
+        "resources": {"cpu": 1, "memory": "2Gi"},
+        "env": [
+          {"name": "PHX_HOST", "value": "school.example.org"},
+          {"name": "MAILER_FROM_EMAIL", "value": "noreply@school.example.org"},
+          {"name": "MAILER_FROM_NAME", "value": "School"},
+          {"name": "EDSPACE_SPEECH_ENABLED", "value": "false"},
+          {"name": "EDSPACE_LLM_BASE_URL", "value": "https://llm.example.org/"},
+          {"name": "EDSPACE_LLM_TEXT_DEPLOYMENT", "value": "text-prod"},
+          {"name": "EDSPACE_LLM_SMALL_DEPLOYMENT", "value": "small-prod"},
+          {"name": "EDSPACE_LLM_EMBEDDING_DEPLOYMENT", "value": "embed-prod"},
+          {"name": "EDSPACE_LLM_API_VERSION", "value": "2025-04-01-preview"}
+        ]
+      }]
+    }
+  }
+}
+JSON
+    fi
+    ;;
+  "containerapp update" )
+    image=""
+    previous=""
+    for arg in "$@"; do
+      if [ "$previous" = "--image" ]; then image=$arg; fi
+      previous=$arg
+    done
+    printf 'update %s\n' "$image" >>"${MOCK_AZ_LOG:?}"
+    ;;
+  "cognitiveservices account" )
+    [ "${3:-}" = "list" ] || exit 2
+    printf 'null\n'
+    ;;
+  "postgres flexible-server" )
+    [ "${3:-}" = "list" ] || exit 2
+    printf '%s\n' '{"sku":{"name":"Standard_D2ds_v5","tier":"GeneralPurpose"},"storage":{"storageSizeGb":128}}'
+    ;;
+  "storage account" )
+    [ "${3:-}" = "list" ] || exit 2
+    printf 'Standard_GRS\n'
+    ;;
+  "deployment group" )
+    [ "${3:-}" = "create" ] || exit 2
+    params=""
+    has_bootstrap=false
+    has_image=false
+    for arg in "$@"; do
+      case "$arg" in
+        @*) params=${arg#@} ;;
+        bootstrapSecrets=false) has_bootstrap=true ;;
+        containerImage=registry.edspace.io/edspace/edspace:v2.0.0) has_image=true ;;
+      esac
+    done
+    [ -n "$params" ] && $has_bootstrap && $has_image
+    jq -e '
+      .tags.value.owner == "customer" and
+      .tags.value["edspace.io/product"] == "edspace" and
+      .appSize.value == "standard" and
+      .customDomain.value == "school.example.org" and
+      .registryServer.value == "registry.edspace.io" and
+      .registryUsername.value == "customer-registry-user" and
+      .mailFromEmail.value == "noreply@school.example.org" and
+      .mailFromName.value == "School" and
+      .enableAzureAi.value == false and
+      .enableSpeech.value == false and
+      .byoLlmBaseUrl.value == "https://llm.example.org/" and
+      .byoLlmTextDeployment.value == "text-prod" and
+      .byoLlmSmallDeployment.value == "small-prod" and
+      .byoLlmEmbeddingDeployment.value == "embed-prod" and
+      .byoLlmApiVersion.value == "2025-04-01-preview" and
+      .pgSkuName.value == "Standard_D2ds_v5" and
+      .pgSkuTier.value == "GeneralPurpose" and
+      .pgStorageGB.value == 128 and
+      .storageSku.value == "Standard_GRS" and
+      (has("mailpaceApiKey") | not) and
+      (has("registryPassword") | not) and
+      (has("byoLlmApiKey") | not)
+    ' "$params" >/dev/null
+    printf 'template-parameters-ok\n' >>"${MOCK_AZ_LOG:?}"
+    ;;
+  *)
+    echo "unexpected az command: $*" >&2
+    exit 2
+    ;;
+esac

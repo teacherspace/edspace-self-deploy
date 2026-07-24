@@ -32,18 +32,16 @@ WARNING - bundled Postgres is for evaluation only.
   they run in a pre-upgrade Job.
 {{- end }}
 
-{{- if not .Values.seed.enabled }}
+{{- if .Values.seed.enabled }}
 
-Seed demo data (optional, once):
+NOTE - seed.enabled is on: the seed Job runs on every install/upgrade while
+enabled. After seeding once, disable it again:
+  helm upgrade {{ .Release.Name }} <chart> --reuse-values --set seed.enabled=false
+{{- else }}
+
+Seed demo data (optional):
   helm upgrade {{ .Release.Name }} <chart> --reuse-values --set seed.enabled=true
-  (or run: kubectl -n {{ .Release.Namespace }} create job --from=... manually)
+  (then disable it again after the Job succeeds — it re-runs while enabled)
 {{- end }}
-
-{{- if and (gt (int .Values.replicaCount) 1) (not .Values.clustering.enabled) }}
-
-WARNING - replicaCount > 1 with clustering disabled: LiveView/PubSub events
-will not propagate between pods. Enable clustering.
-{{- end }}
-
 Verify the running build:
   kubectl -n {{ .Release.Namespace }} exec deploy/{{ include "edspace.fullname" . }} -- wget -qO- http://127.0.0.1:4000/version

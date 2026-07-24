@@ -108,7 +108,9 @@ var plainEnv = [
   { name: 'EDSPACE_LLM_EMBEDDING_DEPLOYMENT', value: llmEmbeddingDeployment }
   { name: 'EDSPACE_SPEECH_ENABLED', value: speechEnabled ? 'true' : 'false' }
   { name: 'MAILER_FROM_EMAIL', value: mailFromEmail }
-  { name: 'MAILER_FROM_NAME', value: mailFromName }
+  // Chromium sessions cost ~250Mi each; the app default of 4 risks OOM on the
+  // 2 GiB standard size, so cap PDF rendering concurrency here.
+  { name: 'CHROMIC_PDF_POOL_SIZE', value: '2' }
 ]
 
 var secretEnv = [
@@ -123,7 +125,10 @@ var secretEnv = [
 var conditionalEnv = concat(
   empty(llmApiVersion) ? [] : [{ name: 'EDSPACE_LLM_API_VERSION', value: llmApiVersion }],
   empty(speechRegion) ? [] : [{ name: 'AZURE_SPEECH_REGION', value: speechRegion }],
-  empty(speechKey) ? [] : [{ name: 'AZURE_SPEECH_KEY', secretRef: 'azure-speech-key' }]
+  empty(speechKey) ? [] : [{ name: 'AZURE_SPEECH_KEY', secretRef: 'azure-speech-key' }],
+  // Omitted when blank: a set-but-empty MAILER_FROM_NAME would override the
+  // app's "EdSpace" default with an empty from-name.
+  empty(mailFromName) ? [] : [{ name: 'MAILER_FROM_NAME', value: mailFromName }]
 )
 
 resource app 'Microsoft.App/containerApps@2025-01-01' = {

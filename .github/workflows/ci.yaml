@@ -24,17 +24,23 @@ jobs:
           for f in chart/edspace/ci/*.yaml; do
             helm lint chart/edspace -f "$f"
           done
+      - name: Reject unsafe and incomplete values
+        run: bash scripts/test-chart-validation.sh
       - name: Render and validate manifests
         run: |
-          go install github.com/yannh/kubeconform/cmd/kubeconform@latest
+          go install github.com/yannh/kubeconform/cmd/kubeconform@v0.7.0
           for f in chart/edspace/ci/*.yaml; do
             helm template edspace chart/edspace -f "$f" \
               | ~/go/bin/kubeconform -strict -ignore-missing-schemas -summary
           done
       - name: Chart README is current (helm-docs)
+        # helm-docs has no --validate flag; regenerate and diff instead.
+        # Version pinned: the diff check is only stable against the version
+        # that generated the committed README.
         run: |
-          go install github.com/norwoodj/helm-docs/cmd/helm-docs@latest
-          ~/go/bin/helm-docs --chart-search-root chart --validate
+          go install github.com/norwoodj/helm-docs/cmd/helm-docs@v1.14.2
+          ~/go/bin/helm-docs --chart-search-root chart
+          git diff --exit-code -- chart/edspace/README.md
 
   compose:
     runs-on: ubuntu-latest
@@ -44,6 +50,7 @@ jobs:
         run: |
           cp compose/.env.example compose/.env
           echo "POSTGRES_PASSWORD=ci-dummy" >> compose/.env
+          echo "EDSPACE_IMAGE_TAG=v0.0.0-ci" >> compose/.env
           docker compose -f compose/compose.yaml --project-directory compose config -q
 
   bicep:
@@ -51,6 +58,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build managed-app template
+        env:
+          EDSPACE_CONTAINER_IMAGE: registry.edspace.io/edspace/edspace:v0.0.0-ci
         run: |
           az bicep install
           cd marketplace/azure/managed-app && ./build.sh --no-zip
@@ -63,4 +72,7 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y shellcheck
           shellcheck scripts/*.sh marketplace/azure/managed-app/*.sh \
-            marketplace/azure/managed-app/test/*.sh marketplace/azure/update-train/scripts/*.sh
+            marketplace/azure/managed-app/test/*.sh marketplace/azure/update-train/scripts/*.sh \
+            marketplace/azure/update-train/test/*.sh marketplace/azure/update-train/test/bin/*
+      - name: Update-train regression tests
+        run: bash marketplace/azure/update-train/test/update-instance.test.sh

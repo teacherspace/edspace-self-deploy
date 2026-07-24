@@ -9,5 +9,5 @@ spec:
   minAvailable: {{ .Values.pdb.minAvailable }}
   selector:
     matchLabels:
-      {{- include "edspace.selectorLabels" . | nindent 6 }}
+      {{- include "edspace.appSelectorLabels" . | nindent 6 }}
 {{- end }}

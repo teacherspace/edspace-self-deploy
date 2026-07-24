@@ -14,7 +14,7 @@ envSecret:                 # secret → Secret
   UNILOGIN_CLIENT_SECRET: "..."
 ```
 
-Both maps are validated against the generated `values.schema.json`: typos and unknown types are caught at `helm lint`/install time, and putting a secret variable in plain `env:` is rejected.
+Both maps are validated against the generated `values.schema.json`: unknown variable names (typos), wrong types, and putting a secret variable in plain `env:` are all rejected at `helm lint`/install time. Variables outside the contract (e.g. a new app release ahead of the chart) go through `extraEnv`/`extraEnvFrom` instead.
 
 For customer-managed secret machinery (External Secrets Operator, CSI driver), mount your own ConfigMaps/Secrets with `extraEnvFrom`, or raw `env` entries with `extraEnv`.
 
@@ -37,7 +37,7 @@ For customer-managed secret machinery (External Secrets Operator, CSI driver), m
 
 ## File storage
 
-- `storage.adapter: local_disk` (default): uploads under `storage.localDisk.root` on a PVC (`storage.localDisk.persistence`). With `ReadWriteOnce` storage this limits you to one replica — the schema enforces it.
+- `storage.adapter: local_disk` (default): uploads under `storage.localDisk.root` on a PVC (`storage.localDisk.persistence`). With `ReadWriteOnce` storage this limits you to one replica and a zero-surge rollout — the schema enforces both, avoiding a second pod that cannot safely attach the volume.
 - `storage.adapter: azure_blob`: set `storage.azureBlob.account/container` and `key` (or `existingSecret`/`existingSecretKey`). **Warning**: the app silently falls back to local disk if any of the three is missing — the chart guards the common cases via schema, but verify after first deploy that uploads land in Blob.
 - S3-compatible storage is not available yet (see [limitations.md](limitations.md)).
 
@@ -47,7 +47,11 @@ For customer-managed secret machinery (External Secrets Operator, CSI driver), m
 
 ## Speech
 
-Speech features are on by default but require Azure Speech credentials (`AZURE_SPEECH_KEY`/`AZURE_SPEECH_REGION` via `env`/`envSecret`). Without Azure, set `env.EDSPACE_SPEECH_ENABLED: "false"`.
+The application default is on, but the Helm and Compose self-deploy packaging
+defaults speech off until separate Azure Speech credentials are provided. To
+enable it, set `env.EDSPACE_SPEECH_ENABLED: "true"`,
+`envSecret.AZURE_SPEECH_KEY`, and `env.AZURE_SPEECH_REGION` (or supply those
+last two through `extraEnv`/`extraEnvFrom`).
 
 ## SSO / OIDC
 

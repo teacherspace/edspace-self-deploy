@@ -1,15 +1,4 @@
 {
-  "_comment": "Per-instance registry for the update train. Hand-maintained until the marketplace notification endpoint feeds this automatically (see ../README.md). ring: canary|broad. Example entry below — replace with real instances.",
-  "instances": [
-    {
-      "_comment": "EXAMPLE — not a real instance",
-      "name": "contoso-school",
-      "ring": "canary",
-      "tenantId": "00000000-0000-0000-0000-000000000000",
-      "subscriptionId": "00000000-0000-0000-0000-000000000000",
-      "managedRg": "mrg-edspace-contoso",
-      "fqdn": "edspace.happyforest-1a2b3c4d.westeurope.azurecontainerapps.io",
-      "notes": "pilot customer; canary since 2026-07"
-    }
-  ]
+  "_comment": "Per-instance registry for the update train. Hand-maintained until the marketplace notification endpoint feeds this automatically (see ../README.md). ring: canary|broad. An empty canary ring fails closed.",
+  "instances": []
 }

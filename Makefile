@@ -4,7 +4,7 @@
 CHART := chart/edspace
 CI_VALUES := $(wildcard $(CHART)/ci/*.yaml)
 
-.PHONY: gen check lint template package bicep compose-config clean
+.PHONY: gen check lint test-validation template package bicep compose-config clean
 
 gen:
 	uv run scripts/gen.py
@@ -18,6 +18,9 @@ lint:
 		helm lint $(CHART) -f $$f || exit 1; \
 	done
 
+test-validation:
+	bash scripts/test-chart-validation.sh
+
 template:
 	helm template edspace $(CHART) -f $(CHART)/ci/default-values.yaml
 
@@ -28,9 +31,13 @@ package: check lint
 bicep:
 	cd marketplace/azure/managed-app && ./build.sh
 
+# Mirrors the CI compose job (.env from the example plus the two values the
+# ${VAR:?} guards require), in a scratch dir so a real compose/.env is untouched.
 compose-config:
-	cd compose && cp -n .env.example .env.ci 2>/dev/null || true; \
-		docker compose --env-file .env.ci config -q && rm -f .env.ci
+	@tmp=$$(mktemp -d) && cp compose/compose.yaml $$tmp/ && cp compose/.env.example $$tmp/.env && \
+		printf 'POSTGRES_PASSWORD=make-dummy\nEDSPACE_IMAGE_TAG=v0.0.0-make\n' >> $$tmp/.env; \
+		docker compose -f $$tmp/compose.yaml --project-directory $$tmp config -q; rc=$$?; \
+		rm -rf $$tmp; exit $$rc
 
 clean:
 	rm -rf dist marketplace/azure/managed-app/dist

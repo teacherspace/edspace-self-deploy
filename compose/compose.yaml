@@ -1,7 +1,8 @@
 # EdSpace — Docker Compose deployment (pilots / evaluations / small installs).
 #
 # Setup: cp .env.example .env && ../scripts/generate-secrets.sh >> .env,
-# then edit .env (PHX_HOST, LLM + MailPace keys). See docs/install-compose.md.
+# then edit .env (PHX_HOST, EDSPACE_IMAGE_TAG, LLM + MailPace keys).
+# See docs/install-compose.md.
 #
 # Values under `environment:` are composed by this file and override .env;
 # everything user-facing lives in .env (generated from config/contract.yaml).
@@ -10,7 +11,7 @@ name: edspace
 
 services:
   app:
-    image: ${EDSPACE_IMAGE:-registry.edspace.io/edspace/edspace}:${EDSPACE_IMAGE_TAG:-latest}
+    image: ${EDSPACE_IMAGE:-registry.edspace.io/edspace/edspace}:${EDSPACE_IMAGE_TAG:?set a release tag in .env}
     restart: unless-stopped
     env_file: .env
     environment:
@@ -19,7 +20,13 @@ services:
       DATABASE_URL: ecto://edspace:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/edspace
       EDSPACE_FILE_STORAGE_ADAPTER: ${EDSPACE_FILE_STORAGE_ADAPTER:-local_disk}
       EDSPACE_FILE_STORAGE_ROOT: ${EDSPACE_FILE_STORAGE_ROOT:-/app/uploads}
+      # Self-deploy defaults speech off until separate Azure Speech credentials
+      # are configured; the application default is on.
+      EDSPACE_SPEECH_ENABLED: ${EDSPACE_SPEECH_ENABLED:-false}
     ports:
+      # Plaintext HTTP on every host interface — put a TLS-terminating
+      # reverse proxy in front for anything beyond a trusted-network pilot
+      # (see docs/install-compose.md).
       - "${EDSPACE_PORT:-4000}:4000"
     ulimits:
       # The release raises its soft fd limit to 262144 at boot (rel/env.sh.eex);
@@ -38,7 +45,7 @@ services:
   db:
     # Postgres 16 with pgvector preinstalled; citext/pg_trgm ship in contrib.
     # The app's migrations run CREATE EXTENSION as the superuser below.
-    image: pgvector/pgvector:pg16
+    image: pgvector/pgvector:0.8.5-pg16
     restart: unless-stopped
     environment:
       POSTGRES_USER: edspace
@@ -53,18 +60,26 @@ services:
       retries: 20
 
   # One-time demo/seed data: docker compose --profile seed run --rm seed
+  # Run only after the app has started at least once — migrations run at app
+  # boot (bin/server), and seeding needs the migrated schema.
   seed:
     profiles: [seed]
-    image: ${EDSPACE_IMAGE:-registry.edspace.io/edspace/edspace}:${EDSPACE_IMAGE_TAG:-latest}
+    image: ${EDSPACE_IMAGE:-registry.edspace.io/edspace/edspace}:${EDSPACE_IMAGE_TAG:?set a release tag in .env}
     command: ["/app/bin/seed"]
     env_file: .env
     environment:
+      # Keep these overrides in sync with the app service above.
       DATABASE_URL: ecto://edspace:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/edspace
+      EDSPACE_FILE_STORAGE_ADAPTER: ${EDSPACE_FILE_STORAGE_ADAPTER:-local_disk}
+      EDSPACE_FILE_STORAGE_ROOT: ${EDSPACE_FILE_STORAGE_ROOT:-/app/uploads}
+      EDSPACE_SPEECH_ENABLED: ${EDSPACE_SPEECH_ENABLED:-false}
       # Seeding boots the full app; Chromium would waste ~1Gi here.
       PDF_ENABLED: "false"
       CHROMIC_PDF_POOL_SIZE: "1"
       POOL_SIZE: "2"
       POOL_COUNT: "1"
+    volumes:
+      - uploads:/app/uploads
     mem_limit: 2g
     depends_on:
       db:

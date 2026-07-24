@@ -544,7 +544,7 @@ vars:
       Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings
       when enabled; set to "false" when no Azure Speech resource is available.
     type: boolean
-    default: { app: true }
+    default: { app: true, chart: false, compose: false }
     required: false
     secret: false
     tier: core
@@ -615,7 +615,7 @@ vars:
       From address for transactional email. Must be a sender verified in
       your MailPace account.
     type: string
-    required: false
+    required: true
     secret: false
     tier: core
     source: user
@@ -1196,8 +1196,7 @@ vars:
     category: deploy
     description: App image tag (compose only). Pin to a release tag.
     type: string
-    default: { compose: latest }
-    required: false
+    required: { chart: false, compose: true }
     secret: false
     tier: core
     source: user

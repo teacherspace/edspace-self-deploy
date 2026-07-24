@@ -10,13 +10,19 @@ publisher) retains operator access and rolls updates via the
 ## Build
 
 ```sh
+export EDSPACE_CONTAINER_IMAGE=registry.edspace.io/edspace/edspace:v1.2.3
 ./build.sh            # dist/mainTemplate.json + createUiDefinition + view + zip
-./build.sh --no-zip   # CI compile check
+./build.sh --no-zip   # compile/package check without the zip
 ```
+
+The build requires a version-pinned image and refuses mutable `latest` or
+untagged image references. Customers are never asked for the image value.
 
 Also run before submission: ARM-TTK (`Test-AzTemplate -TemplatePath ./dist`),
 the [createUiDefinition sandbox](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade),
-and the Service Catalog end-to-end test (`test/service-catalog-deploy.sh`).
+and the Service Catalog end-to-end test (`test/service-catalog-deploy.sh`). The
+test requires `PUBLISHER_GROUP_OBJECT_ID` for the publisher-tenant group that
+will be authorized on the test definition; it rejects missing/zero values.
 
 ## Secret model — read before touching anything
 
@@ -57,8 +63,10 @@ Don't.
 - **Probes**: startup `/health` with a 5-minute window (migrations run before
   the port binds), readiness `/health` (DB-coupled — correct traffic gate),
   liveness `tcpSocket` (a DB outage must not restart-loop the app).
-- **Postgres**: v16, extensions allow-list `VECTOR,CITEXT,PG_TRGM`,
-  `max_connections=100` (app pool: 30×2 + headroom). Network posture v1:
+- **Postgres**: v16, extensions allow-list `VECTOR,CITEXT,PG_TRGM`.
+  `max_connections` is left at the SKU default (B2s 429, D2ds_v5 859 — both
+  clear the app pool's 30×2 + headroom; it's also a static parameter that
+  would sit pending-restart if overridden). Network posture v1:
   public endpoint + `AllowAllAzureServicesAndResourcesWithinAzureIps` (ACA
   Consumption has no stable egress IP). Hardening path (v2, new instances
   only — PG network mode is immutable): VNet-integrated ACA + PG private
@@ -71,6 +79,12 @@ Don't.
 - **AI quota gotcha**: GlobalStandard model deployments draw on the
   *customer subscription's* quota in `aiLocation`. Deployment fails without
   quota — the UI warns and links the increase form; capacities are parameters.
+- **Publisher access** is configured as a Partner Center plan authorization,
+  not as a customer Key Vault policy. Managed-app operations use the
+  publisher-tenant identity's projected control-plane access to the managed
+  resource group. The vault intentionally grants no permanent publisher data-
+  plane access; ARM template deployment reads its secrets through
+  `enabledForTemplateDeployment`.
 
 ## Custom domain runbook (publisher support)
 
@@ -106,9 +120,6 @@ Parameter names mirror the env vars (camelCase ↔ SCREAMING_SNAKE) so a future
 
 ## Open TODOs (grep `TODO(edspace)`)
 
-- Publisher operations **group object id** (Key Vault access policy +
-  definition authorizations) — use a group so operators rotate without
-  republishing.
 - **Partner Center**: account, Azure Application offer + Managed Application
   plan; upload the same zip; configure authorizations + notification endpoint
   (an Azure Function appending `{applicationId, tenantId, managedRg, plan,
@@ -116,7 +127,5 @@ Parameter names mirror the env vars (camelCase ↔ SCREAMING_SNAKE) so a future
   required before GA).
 - **Model catalog versions** for gpt-5.4 / gpt-5-mini / text-embedding-3-small
   (empty = platform default; pin before first publish).
-- **Cross-tenant CI auth** for the update train — see update-train/README.
-- Pin `containerImage` tag per definition version.
 - Registry credential distribution flow to customers (welcome email vs
   automated provisioning).

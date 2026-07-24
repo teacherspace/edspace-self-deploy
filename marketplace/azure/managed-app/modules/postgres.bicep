@@ -16,7 +16,7 @@ param skuName string = 'Standard_B2s'
 param skuTier string = 'Burstable'
 
 @minValue(32)
-@maxValue(1024)
+@maxValue(32767)
 param storageSizeGB int = 32
 
 param databaseName string = 'edspace'
@@ -25,9 +25,10 @@ param databaseName string = 'edspace'
 // allow-listed on the server or migrations fail on first boot.
 var allowedExtensions = 'VECTOR,CITEXT,PG_TRGM'
 
-// App pool math: POOL_SIZE(30) x POOL_COUNT(2) = 60 per node, plus
-// migrations/Oban/operator headroom (see docs/database.md in this repo).
-var maxConnections = '100'
+// max_connections is deliberately NOT overridden: it is a static parameter
+// (needs a server restart to apply), and the offered SKUs' defaults (B2s 429,
+// D2ds_v5 859) already clear the app's pool math — POOL_SIZE(30) x
+// POOL_COUNT(2) = 60 per node plus headroom (see docs/database.md).
 
 resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   name: serverName
@@ -90,16 +91,6 @@ resource extensionsConfig 'Microsoft.DBforPostgreSQL/flexibleServers/configurati
     source: 'user-override'
   }
   dependsOn: [allowAzureServices]
-}
-
-resource maxConnectionsConfig 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = {
-  parent: server
-  name: 'max_connections'
-  properties: {
-    value: maxConnections
-    source: 'user-override'
-  }
-  dependsOn: [extensionsConfig]
 }
 
 output fqdn string = server.properties.fullyQualifiedDomainName

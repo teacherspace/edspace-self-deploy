@@ -51,3 +51,7 @@ autoscaling:
 pdb:
   enabled: true
   minAvailable: 2
+strategy:
+  rollingUpdate:
+    maxSurge: 1
+    maxUnavailable: 0

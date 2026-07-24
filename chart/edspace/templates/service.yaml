@@ -12,4 +12,4 @@ spec:
       targetPort: http
       protocol: TCP
   selector:
-    {{- include "edspace.selectorLabels" . | nindent 4 }}
+    {{- include "edspace.appSelectorLabels" . | nindent 4 }}

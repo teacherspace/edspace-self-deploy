@@ -14,10 +14,15 @@ DEF_RG="${1:?usage: $0 <definition-rg> <storage-rg> <storage-account>}"
 STG_RG="${2:?}"
 STG_ACCOUNT="${3:?}"
 
-# TODO(edspace): publisher operations GROUP object id + role. Owner
-# (8e3af657-a8ff-443c-a75c-2fe8c4bcb635) — Contributor cannot write RBAC,
-# which the update train may need later.
-PUBLISHER_GROUP_OBJECT_ID="${PUBLISHER_GROUP_OBJECT_ID:-00000000-0000-0000-0000-000000000000}"
+# The group lives in the publisher tenant and is the same authorization model
+# configured on the Partner Center plan. Never publish a zero placeholder.
+PUBLISHER_GROUP_OBJECT_ID="${PUBLISHER_GROUP_OBJECT_ID:?set the publisher operations group object id}"
+[[ $PUBLISHER_GROUP_OBJECT_ID =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$ ]] &&
+  [ "$PUBLISHER_GROUP_OBJECT_ID" != "00000000-0000-0000-0000-000000000000" ] || {
+    echo "PUBLISHER_GROUP_OBJECT_ID must be a non-zero GUID" >&2
+    exit 2
+  }
+# Owner: Contributor cannot write RBAC if a later template version needs it.
 OWNER_ROLE_ID="8e3af657-a8ff-443c-a75c-2fe8c4bcb635"
 
 ZIP=dist/edspace-managed-app.zip

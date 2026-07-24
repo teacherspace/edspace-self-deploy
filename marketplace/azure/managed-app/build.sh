@@ -12,11 +12,37 @@ cd "$(dirname "$0")"
 NO_ZIP=0
 [ "${1:-}" = "--no-zip" ] && NO_ZIP=1
 
+EDSPACE_CONTAINER_IMAGE=${EDSPACE_CONTAINER_IMAGE:?set a version-pinned EdSpace container image}
+case "$EDSPACE_CONTAINER_IMAGE" in
+  *:latest|*__EDSPACE_CONTAINER_IMAGE__*)
+    echo "EDSPACE_CONTAINER_IMAGE must use an immutable release tag or digest" >&2
+    exit 2
+    ;;
+esac
+[[ $EDSPACE_CONTAINER_IMAGE =~ @sha256:[0-9a-fA-F]{64}$ || $EDSPACE_CONTAINER_IMAGE =~ :[^/]+$ ]] || {
+  echo "EDSPACE_CONTAINER_IMAGE must include a release tag or sha256 digest" >&2
+  exit 2
+}
+
 rm -rf dist
 mkdir -p dist
 
 echo "== az bicep build"
 az bicep build --file mainTemplate.bicep --outfile dist/mainTemplate.json
+
+# The release image must be fixed in the package, never requested from
+# customers and never left as a runnable placeholder.
+PATCHED_TEMPLATE=$(mktemp)
+trap 'rm -f "${PATCHED_TEMPLATE:-}"' EXIT
+jq --arg image "$EDSPACE_CONTAINER_IMAGE" \
+  '.parameters.containerImage.defaultValue = $image' \
+  dist/mainTemplate.json > "$PATCHED_TEMPLATE"
+mv "$PATCHED_TEMPLATE" dist/mainTemplate.json
+PATCHED_TEMPLATE=""
+if grep -Eq '__[A-Z0-9_]+__' dist/mainTemplate.json; then
+  echo "compiled template still contains an unreplaced publisher token" >&2
+  exit 2
+fi
 
 echo "== validating JSON assets"
 python3 -m json.tool createUiDefinition.json >/dev/null
