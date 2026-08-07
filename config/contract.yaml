@@ -46,8 +46,6 @@ categories:
     title: PDF export
   - id: telemetry
     title: Telemetry (Langfuse / OpenTelemetry)
-  - id: linear
-    title: Linear feedback integration
   - id: lifecycle
     title: Shutdown & socket draining
   - id: beam
@@ -303,7 +301,7 @@ vars:
     secret: false
     tier: core
     source: user
-    example: https://aif-edspace-prod.cognitiveservices.azure.com/
+    example: https://example.cognitiveservices.azure.com/
 
   - name: EDSPACE_LLM_API_VERSION
     category: llm
@@ -985,73 +983,6 @@ vars:
     required: false
     secret: false
     tier: internal
-    source: user
-
-  # ----------------------------------------------------------------- linear
-  - name: LINEAR_API_KEY
-    category: linear
-    description: >-
-      Linear API key for the in-app feedback integration. Leave empty to
-      disable (feedback is then not forwarded anywhere).
-    type: string
-    required: false
-    secret: true
-    tier: advanced
-    source: user
-
-  - name: LINEAR_BASE_URL
-    category: linear
-    description: Linear GraphQL endpoint.
-    type: string
-    default: { app: "https://api.linear.app/graphql" }
-    required: false
-    secret: false
-    tier: internal
-    source: user
-
-  - name: LINEAR_FEEDBACK_TEAM_ID
-    category: linear
-    description: Linear team receiving feedback issues.
-    type: string
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: LINEAR_INTERNAL_CUSTOMER_ID
-    category: linear
-    description: Linear customer id attached to feedback issues.
-    type: string
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: LINEAR_LABEL_BUG
-    category: linear
-    description: Linear label id applied to bug feedback.
-    type: string
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: LINEAR_LABEL_IDEA
-    category: linear
-    description: Linear label id applied to idea feedback.
-    type: string
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: LINEAR_LABEL_OTHER
-    category: linear
-    description: Linear label id applied to other feedback.
-    type: string
-    required: false
-    secret: false
-    tier: advanced
     source: user
 
   # -------------------------------------------------------------- lifecycle

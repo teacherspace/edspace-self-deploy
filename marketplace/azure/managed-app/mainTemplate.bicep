@@ -13,7 +13,7 @@
 //   * Every consumer reads secrets from the vault via getSecret(), never the
 //     raw params — so re-deployments with bootstrapSecrets=false are fully
 //     idempotent (nothing rotates, no secure params need to be supplied).
-//   * The update train MUST pass bootstrapSecrets=false. Marketplace
+//   * Vendor-operated redeploys MUST pass bootstrapSecrets=false. Marketplace
 //     definition versions are for NEW installs only. Image-only updates use
 //     `az containerapp update` and never touch this template.
 
@@ -27,14 +27,14 @@ param tags object = {}
 @description('standard = 1 vCPU / 2 GiB, large = 2 vCPU / 4 GiB.')
 param appSize string = 'standard'
 
-@description('App image pinned by build.sh for each managed-app definition version; the update train moves instances forward.')
+@description('App image pinned by build.sh for each managed-app definition version; vendor-operated updates move instances forward.')
 param containerImage string = '__EDSPACE_CONTAINER_IMAGE__'
 
 // ------------------------------------------------------------------ database
 param pgSkuName string = 'Standard_B2s'
 param pgSkuTier string = 'Burstable'
 // Upper bound is the platform maximum, NOT the UI's: storage auto-grows, and
-// update-train template redeploys pass the server's CURRENT size back in.
+// vendor-operated template redeploys pass the server's CURRENT size back in.
 @minValue(32)
 @maxValue(32767)
 param pgStorageGB int = 32
@@ -88,7 +88,7 @@ param registryUsername string
 param registryPassword string = ''
 
 // ------------------------------------------------------------------- secrets
-@description('Persist generated + user-supplied secrets into the instance Key Vault. true on first install ONLY; update-train redeploys MUST pass false.')
+@description('Persist generated + user-supplied secrets into the instance Key Vault. true on first install ONLY; vendor-operated redeploys MUST pass false.')
 param bootstrapSecrets bool = true
 
 // newGuid() is only legal in parameter defaults. Two GUIDs minus dashes =

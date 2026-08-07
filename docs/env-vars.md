@@ -117,17 +117,6 @@ Variables marked *managed* are composed by the deployment packaging
 | `LANGFUSE_RELEASE` | no |  |  | service.version tag on emitted traces. |
 | `EDSPACE_OTEL_LLM_PAYLOADS` | no | raw |  | Whether prompt/completion text is included in telemetry spans. Set to "none" to strip payloads (recommended when traces leave your infrastructure). |
 
-## Linear feedback integration
-
-| Variable | Required | Default | Secret | Description |
-|---|---|---|---|---|
-| `LINEAR_API_KEY` | no |  | yes | Linear API key for the in-app feedback integration. Leave empty to disable (feedback is then not forwarded anywhere). |
-| `LINEAR_FEEDBACK_TEAM_ID` | no |  |  | Linear team receiving feedback issues. |
-| `LINEAR_INTERNAL_CUSTOMER_ID` | no |  |  | Linear customer id attached to feedback issues. |
-| `LINEAR_LABEL_BUG` | no |  |  | Linear label id applied to bug feedback. |
-| `LINEAR_LABEL_IDEA` | no |  |  | Linear label id applied to idea feedback. |
-| `LINEAR_LABEL_OTHER` | no |  |  | Linear label id applied to other feedback. |
-
 ## Deployment settings (not read by the app)
 
 | Variable | Required | Default | Secret | Description |
@@ -141,4 +130,4 @@ Variables marked *managed* are composed by the deployment packaging
 
 Set only under guidance from EdSpace support:
 
-`PHX_SERVER`; `PORT`; `DNS_CLUSTER_QUERY`; `DB_QUEUE_TARGET_MS`; `DB_QUEUE_INTERVAL_MS`; `DB_TIMEOUT_MS`; `AZURE_API_KEY`; `AZURE_BASE_URL`; `REQ_LLM_POOL_SIZE`; `REQ_LLM_POOL_COUNT`; `REQ_LLM_STRUCTURED_POOL_SIZE`; `REQ_LLM_STRUCTURED_POOL_COUNT`; `REQ_LLM_BULK_POOL_SIZE`; `REQ_LLM_BULK_POOL_COUNT`; `MAX_CONCURRENT_STREAMS`; `MAX_CONCURRENT_CREATION_SESSIONS`; `MAX_CONCURRENT_BACKGROUND_TASKS`; `HISTORY_MESSAGE_WINDOW`; `EDSPACE_CHAT_MAX_TOTAL_CACHED_CHARS`; `EDSPACE_CHAT_MAX_HISTORY_CHARS`; `CHROMIC_PDF_TIMEOUT_MS`; `CHROMIC_PDF_INIT_TIMEOUT_MS`; `CHROMIC_PDF_CHROME_EXECUTABLE`; `LANGFUSE_BASEURL`; `LANGFUSE_TIMEOUT`; `OTEL_BSP_MAX_QUEUE_SIZE`; `OTEL_BSP_SCHEDULE_DELAY_MS`; `OTEL_BSP_EXPORT_TIMEOUT_MS`; `LINEAR_BASE_URL`; `SOCKET_DRAINER_BATCH_SIZE`; `SOCKET_DRAINER_BATCH_INTERVAL_MS`; `SOCKET_DRAINER_SHUTDOWN_MS`; `ULIMIT_NOFILE`; `ERL_FLAGS`; `ERL_MAX_PORTS`; `ERL_MAX_PROCESSES`; `RELEASE_DISTRIBUTION`; `RELEASE_NODE`; `RELEASE_COOKIE`; `DISCARD_ASSISTANT_DRAFTS`
+`PHX_SERVER`; `PORT`; `DNS_CLUSTER_QUERY`; `DB_QUEUE_TARGET_MS`; `DB_QUEUE_INTERVAL_MS`; `DB_TIMEOUT_MS`; `AZURE_API_KEY`; `AZURE_BASE_URL`; `REQ_LLM_POOL_SIZE`; `REQ_LLM_POOL_COUNT`; `REQ_LLM_STRUCTURED_POOL_SIZE`; `REQ_LLM_STRUCTURED_POOL_COUNT`; `REQ_LLM_BULK_POOL_SIZE`; `REQ_LLM_BULK_POOL_COUNT`; `MAX_CONCURRENT_STREAMS`; `MAX_CONCURRENT_CREATION_SESSIONS`; `MAX_CONCURRENT_BACKGROUND_TASKS`; `HISTORY_MESSAGE_WINDOW`; `EDSPACE_CHAT_MAX_TOTAL_CACHED_CHARS`; `EDSPACE_CHAT_MAX_HISTORY_CHARS`; `CHROMIC_PDF_TIMEOUT_MS`; `CHROMIC_PDF_INIT_TIMEOUT_MS`; `CHROMIC_PDF_CHROME_EXECUTABLE`; `LANGFUSE_BASEURL`; `LANGFUSE_TIMEOUT`; `OTEL_BSP_MAX_QUEUE_SIZE`; `OTEL_BSP_SCHEDULE_DELAY_MS`; `OTEL_BSP_EXPORT_TIMEOUT_MS`; `SOCKET_DRAINER_BATCH_SIZE`; `SOCKET_DRAINER_BATCH_INTERVAL_MS`; `SOCKET_DRAINER_SHUTDOWN_MS`; `ULIMIT_NOFILE`; `ERL_FLAGS`; `ERL_MAX_PORTS`; `ERL_MAX_PROCESSES`; `RELEASE_DISTRIBUTION`; `RELEASE_NODE`; `RELEASE_COOKIE`; `DISCARD_ASSISTANT_DRAFTS`

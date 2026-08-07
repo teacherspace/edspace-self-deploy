@@ -1,7 +1,83 @@
+EdSpace Self-Deploy — License
+
 Copyright (c) EdSpace / Teacherspace. All rights reserved.
 
-This repository contains deployment packaging for the EdSpace application.
-Use is governed by your EdSpace subscription / license agreement.
+This is proprietary, source-available software. It is not open source, and no
+open-source license is granted.
 
-TODO(edspace): replace with the final commercial license / EULA text before
-distributing to customers.
+1. SCOPE
+
+   This repository contains deployment packaging for the EdSpace application:
+   the Helm chart, Docker Compose files, Azure Managed Application templates,
+   the configuration contract and generated schemas, scripts, and
+   documentation (together, "the Packaging").
+
+   The Packaging does not contain the EdSpace application. The application is
+   distributed separately as a container image from EdSpace's registry, under
+   credentials issued to you by EdSpace.
+
+2. RELATIONSHIP TO YOUR AGREEMENT
+
+   Your use of the EdSpace application is governed by the subscription or
+   license agreement between you and EdSpace ("the Agreement"). This file
+   governs the Packaging only. Where this file and the Agreement conflict, the
+   Agreement controls.
+
+3. GRANT
+
+   If you hold a current Agreement, EdSpace grants you a non-exclusive,
+   non-transferable, revocable right to use, copy, and modify the Packaging
+   for the sole purpose of deploying, configuring, and operating the EdSpace
+   application in infrastructure you control, for your own internal use.
+
+4. RESTRICTIONS
+
+   Except where the Agreement expressly permits otherwise, you may not:
+
+   (a) redistribute, publish, sublicense, sell, or otherwise make the
+       Packaging or any derivative of it available to third parties;
+
+   (b) use the Packaging to deploy or operate the EdSpace application on
+       behalf of a third party, or to provide a hosted, managed, or
+       service-bureau offering to others;
+
+   (c) share, publish, or transfer the registry credentials issued to you, or
+       redistribute the EdSpace container images those credentials grant
+       access to;
+
+   (d) remove or obscure this notice, or any copyright or attribution notice
+       contained in the Packaging.
+
+   Reading, auditing, and reviewing the Packaging — including by your own
+   staff, auditors, or security assessors under obligations of
+   confidentiality — is permitted and encouraged.
+
+5. THIRD-PARTY COMPONENTS
+
+   The Packaging references third-party container images, including
+   pgvector/pgvector and busybox, which are not covered by this license and
+   remain subject to the licenses of their respective publishers. EdSpace
+   grants no rights in them and makes no representation about them.
+
+6. NO WARRANTY
+
+   THE PACKAGING IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+   FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT. Any warranties
+   relating to the EdSpace application itself are only those stated in the
+   Agreement.
+
+7. LIMITATION OF LIABILITY
+
+   To the maximum extent permitted by applicable law, and except as the
+   Agreement provides otherwise, EdSpace shall not be liable for any claim,
+   damages, or other liability, whether in contract, tort, or otherwise,
+   arising from or in connection with the Packaging or its use. Nothing in
+   this section limits liability that cannot be limited by law.
+
+8. TERMINATION
+
+   The rights granted in section 3 end when the Agreement ends or is
+   terminated. On termination you must cease using the Packaging and destroy
+   your copies of it. Sections 5 through 7 survive termination. This section
+   does not affect your obligations under the Agreement.

@@ -19,6 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
+        with:
+          # Pinned, and must match release.yaml and azure-pipelines-chart.yml.
+          # Unpinned this tracks latest, so the helm that validates the chart
+          # can drift a major version away from the one that packages the
+          # artifact customers run, with nothing reporting the difference.
+          version: v4.2.2
       - name: Lint against every ci values file
         run: |
           for f in chart/edspace/ci/*.yaml; do
@@ -72,7 +78,4 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y shellcheck
           shellcheck scripts/*.sh marketplace/azure/managed-app/*.sh \
-            marketplace/azure/managed-app/test/*.sh marketplace/azure/update-train/scripts/*.sh \
-            marketplace/azure/update-train/test/*.sh marketplace/azure/update-train/test/bin/*
-      - name: Update-train regression tests
-        run: bash marketplace/azure/update-train/test/update-instance.test.sh
+            marketplace/azure/managed-app/test/*.sh

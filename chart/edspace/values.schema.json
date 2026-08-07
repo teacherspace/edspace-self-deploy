@@ -1366,34 +1366,6 @@
           ],
           "description": "OpenTelemetry batch span processor export timeout."
         },
-        "LINEAR_API_KEY": {
-          "not": {},
-          "description": "LINEAR_API_KEY is a secret - set it under envSecret (or the matching structured value) instead."
-        },
-        "LINEAR_BASE_URL": {
-          "type": "string",
-          "description": "Linear GraphQL endpoint."
-        },
-        "LINEAR_FEEDBACK_TEAM_ID": {
-          "type": "string",
-          "description": "Linear team receiving feedback issues."
-        },
-        "LINEAR_INTERNAL_CUSTOMER_ID": {
-          "type": "string",
-          "description": "Linear customer id attached to feedback issues."
-        },
-        "LINEAR_LABEL_BUG": {
-          "type": "string",
-          "description": "Linear label id applied to bug feedback."
-        },
-        "LINEAR_LABEL_IDEA": {
-          "type": "string",
-          "description": "Linear label id applied to idea feedback."
-        },
-        "LINEAR_LABEL_OTHER": {
-          "type": "string",
-          "description": "Linear label id applied to other feedback."
-        },
         "SOCKET_DRAINER_BATCH_SIZE": {
           "anyOf": [
             {
@@ -2115,34 +2087,6 @@
             }
           ],
           "description": "OpenTelemetry batch span processor export timeout."
-        },
-        "LINEAR_API_KEY": {
-          "type": "string",
-          "description": "Linear API key for the in-app feedback integration. Leave empty to disable (feedback is then not forwarded anywhere)."
-        },
-        "LINEAR_BASE_URL": {
-          "type": "string",
-          "description": "Linear GraphQL endpoint."
-        },
-        "LINEAR_FEEDBACK_TEAM_ID": {
-          "type": "string",
-          "description": "Linear team receiving feedback issues."
-        },
-        "LINEAR_INTERNAL_CUSTOMER_ID": {
-          "type": "string",
-          "description": "Linear customer id attached to feedback issues."
-        },
-        "LINEAR_LABEL_BUG": {
-          "type": "string",
-          "description": "Linear label id applied to bug feedback."
-        },
-        "LINEAR_LABEL_IDEA": {
-          "type": "string",
-          "description": "Linear label id applied to idea feedback."
-        },
-        "LINEAR_LABEL_OTHER": {
-          "type": "string",
-          "description": "Linear label id applied to other feedback."
         },
         "SOCKET_DRAINER_BATCH_SIZE": {
           "anyOf": [

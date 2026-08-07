@@ -1,0 +1,229 @@
+# =============================================================================================
+# Chart publication — packages the Helm chart and pushes it to the INTERNAL registry.
+# =============================================================================================
+# This is the pipeline that gives infrastructure/iac-registry's
+# azure-pipelines-release.yml something to promote. Without it that pipeline has a
+# customer registry, customer tokens, and no chart to import.
+#
+# WHY THIS RUNS IN AZURE DEVOPS AND NOT GITHUB ACTIONS
+#   Pushing to a registry needs a registry credential, and where that credential lives is
+#   the whole question. An ADO service connection supplies it as AAD, per run: `az acr login`
+#   writes a short-lived token into the docker config that helm then reads, and nothing
+#   standing is stored anywhere. The GitHub Actions equivalent is a username/password pair
+#   sitting in repo secrets indefinitely, on a repo whose documentation is customer handover
+#   material. The app repo's .github/workflows/release-prod.yml states the same rule for
+#   itself in its header — "no build, no registry access" — and holds only SSH deploy keys.
+#
+#   So the split on a tag is: GitHub Actions validates and cuts the release
+#   (.github/workflows/release.yaml, no credentials); this pipeline publishes the artifact.
+#   Both read scripts/release-guard.sh so they cannot disagree about what is releasable.
+#
+# WHAT THIS DOES NOT DO: promote. Pushing here makes the chart available INTERNALLY.
+#   Customers see nothing until azure-pipelines-release.yml imports it by digest, behind the
+#   Edspace-prod approval. That pipeline needs the chart digest as an input, so the last step
+#   here prints it into the build summary rather than making someone look it up afterwards.
+#
+# WHAT THIS DOES NOT DO: build the app image. The app repo's azure-pipelines-k8s.yml owns
+#   that. See "Resolving the image digest" at the bottom of this file — the two artifacts do
+#   not currently share a tag scheme, and promotion needs both digests.
+# =============================================================================================
+
+# Tags only. Branch CI lives in GitHub Actions (.github/workflows/ci.yaml) and runs on every
+# pull request; duplicating it here would double the feedback without adding a check. This
+# pipeline exists for the one thing Actions deliberately cannot do — push.
+trigger:
+  branches:
+    exclude:
+      - '*'
+  tags:
+    include:
+      - v*
+
+pr: none
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  # The internal build registry: the same one the app's ADO pipeline pushes images to, and
+  # the source azure-pipelines-release.yml imports from. Name only, not the login server —
+  # `az acr login` and `az acr repository show` both take the short name.
+  registryName: lruk8s
+
+  # helm appends the chart name on push, so the chart lands at edspace/charts/edspace. That
+  # must equal `chartRepository` in iac-registry's parameters.prod.bicepparam, which is the
+  # source of truth for the path customers are granted read on. If these drift, promotion
+  # imports from a path that does not exist, or publishes to one no customer can reach.
+  chartRepo: edspace/charts
+
+  # Must match the version .github/workflows/ci.yaml and release.yaml install. The chart is
+  # validated by one helm and packaged by another only if this is allowed to float, and the
+  # packaged artifact is the one customers run.
+  helmVersion: 4.2.2
+
+  # SERVICE-CONNECTION-NOT-CHOSEN
+  # Replace with the ADO service connection whose identity holds AcrPush on the registry
+  # above, and delete the marker line — the Guard step fails the build while it is present,
+  # so this cannot quietly become a real release under a placeholder. The app's build uses
+  # one already; it is configured in tasks/k8s/build-image.yaml in the shared
+  # alineadigital/pipeline-templates repo (Bitbucket), not here.
+  internalRegistryConnection: 'REPLACE-ME'
+
+steps:
+  - checkout: self
+    # Shallow is fine: nothing here reads history, only the tagged tree.
+    fetchDepth: 1
+
+  - task: HelmInstaller@1
+    displayName: Install helm (pinned)
+    inputs:
+      helmVersionToInstall: $(helmVersion)
+
+  # ---------------------------------------------------------------------------
+  # Guard — everything that must fail BEFORE the push, because after it the
+  # artifact exists and a bad one cannot be unpublished from a registry that
+  # other pipelines are about to import from by digest.
+  # ---------------------------------------------------------------------------
+  - bash: |
+      set -euo pipefail
+
+      # Both values arrive through env:, not as inline $(macros). Azure DevOps substitutes
+      # $(var) into this script's TEXT before bash runs it, so an undefined variable would
+      # land here as a literal "$(...)" that bash reads as COMMAND substitution, and a tag
+      # name containing shell metacharacters would be evaluated rather than compared. Going
+      # through env means bash only ever sees a string. iac-registry's release pipeline
+      # routes its optional credentials the same way, for the same reason.
+      #
+      # The empty and '$'* cases are what an undefined or never-set variable looks like.
+      case "${REGISTRY_CONNECTION:-}" in
+        ''|'REPLACE-ME'|'$'*)
+          echo "##vso[task.logissue type=error]internalRegistryConnection is still the placeholder."
+          echo "Set it to the service connection holding AcrPush on the internal registry, and"
+          echo "delete the SERVICE-CONNECTION-NOT-CHOSEN marker above it."
+          exit 1
+          ;;
+      esac
+
+      # TAG is the bare tag (v1.2.3) on a tag-triggered run.
+      GUARD=$(bash scripts/release-guard.sh "$TAG")
+      VERSION=$(printf '%s\n' "$GUARD" | sed -n 's/^version=//p')
+      APP_VERSION=$(printf '%s\n' "$GUARD" | sed -n 's/^appVersion=//p')
+
+      echo "Chart version $VERSION (app $APP_VERSION)"
+      echo "##vso[task.setvariable variable=chartVersion]$VERSION"
+      echo "##vso[task.setvariable variable=appVersion]$APP_VERSION"
+    name: guard
+    displayName: 'Guard: tag is releasable'
+    env:
+      REGISTRY_CONNECTION: $(internalRegistryConnection)
+      TAG: $(Build.SourceBranchName)
+
+  # ---------------------------------------------------------------------------
+  # Publish. `az acr login` under AzureCLI@2 exchanges the service connection's AAD identity
+  # for a short-lived registry token and writes it into the docker config; helm reads that
+  # config, so `helm push` needs no --username/--password and none exists to leak.
+  # ---------------------------------------------------------------------------
+  - task: AzureCLI@2
+    displayName: Package and push the chart
+    name: publish
+    inputs:
+      azureSubscription: $(internalRegistryConnection)
+      scriptType: bash
+      scriptLocation: inlineScript
+      inlineScript: |
+        set -euo pipefail
+
+        VERSION='$(chartVersion)'
+        REGISTRY='$(registryName)'
+        REPO='$(chartRepo)'
+
+        az acr login --name "$REGISTRY"
+
+        helm package chart/edspace -d dist
+
+        # Push by exact filename rather than a glob: the version is known, and a glob that
+        # matched two tarballs would push whichever the shell sorted first.
+        TARBALL="dist/edspace-${VERSION}.tgz"
+        [ -f "$TARBALL" ] || {
+          echo "##vso[task.logissue type=error]helm package did not produce $TARBALL"
+          ls -la dist
+          exit 1; }
+
+        # helm prints "Digest: sha256:..." on a successful push. That digest is what
+        # promotion copies by, so capture it here instead of making an operator go and
+        # find it. Redirecting both streams because which one helm uses has changed
+        # between releases and the pin above will eventually move.
+        helm push "$TARBALL" "oci://${REGISTRY}.azurecr.io/${REPO}" 2>&1 | tee push.log
+
+        # awk, not `sed | head -1`: this script runs under pipefail, where head exiting
+        # first can hand the pipeline a SIGPIPE status and abort the step with an error
+        # that has nothing to do with the push.
+        CHART_DIGEST=$(awk '/^Digest: /{print $2; exit}' push.log)
+
+        if [ -z "$CHART_DIGEST" ]; then
+          echo "##vso[task.logissue type=error]Chart pushed, but its digest could not be read from helm's output."
+          echo "The chart IS published; only the digest capture failed. Promotion needs it — recover with:"
+          echo "  az acr repository show -n ${REGISTRY} --image ${REPO}/edspace:${VERSION} --query digest -o tsv"
+          exit 1
+        fi
+
+        echo "##vso[task.setvariable variable=chartDigest]$CHART_DIGEST"
+        echo "##vso[task.setvariable variable=chartDigest;isOutput=true]$CHART_DIGEST"
+
+  # ---------------------------------------------------------------------------
+  # Promotion inputs — the handoff to azure-pipelines-release.yml, written where the person
+  # who has to run it will actually see it.
+  # ---------------------------------------------------------------------------
+  - bash: |
+      set -euo pipefail
+      SUMMARY="${STAGING}/promotion-inputs.md"
+
+      # Through env: for the same reason as the Guard step — these are ADO macros, and bash
+      # would command-substitute any that arrived undefined.
+      {
+        echo "### Chart published to \`${REGISTRY}.azurecr.io\` — not yet visible to customers"
+        echo
+        echo "Promote with **EdSpace customer registry — release**"
+        echo "(\`infrastructure/iac-registry/azure-pipelines-release.yml\`):"
+        echo
+        echo '```'
+        echo "version      ${VERSION}"
+        echo "chartDigest  ${CHART_DIGEST}"
+        echo "imageDigest  <resolve separately — see below>"
+        echo '```'
+        echo
+        echo "**The image digest is not resolved here.** This repo packages the chart; the app repo"
+        echo "builds the image, and the two do not share a tag scheme — the app's build tag is"
+        echo "\`<project>-<buildId>-<sha7>\`, not the chart's \`${APP_VERSION}\`. The authoritative record of"
+        echo "which image reached TEST is the values file history in \`k8s-edspace-noneprod\`, which is"
+        echo "what the app's \`release-prod.yml\` and the promotion pipeline's provenance gate both read."
+        echo
+        echo "Promotion refuses any image digest that never reached TEST, so a guess fails closed."
+      } > "$SUMMARY"
+
+      echo "##vso[task.uploadsummary]$SUMMARY"
+    displayName: Print promotion inputs
+    env:
+      STAGING: $(Build.ArtifactStagingDirectory)
+      REGISTRY: $(registryName)
+      VERSION: $(chartVersion)
+      APP_VERSION: $(appVersion)
+      CHART_DIGEST: $(chartDigest)
+
+# =============================================================================================
+# Resolving the image digest — known gap, deliberately not papered over above.
+# =============================================================================================
+# azure-pipelines-release.yml imports the app image from `$sourceRegistry/$imageRepository@
+# $imageDigest`, where imageRepository is `edspace/edspace` per iac-registry's
+# parameters.prod.bicepparam. Nothing currently publishes to that path: the app's ADO pipeline
+# pushes to lruk8s.azurecr.io/teacheee-prototype, tagged <project>-<buildId>-<sha7>.
+#
+# So promotion's image side needs one of:
+#   - the app pipeline also tagging/pushing a semver copy at edspace/edspace, or
+#   - iac-registry's imageRepository changed to the path that actually exists, or
+#   - an explicit mapping step that resolves a release version to the build tag that
+#     reached TEST (the lookup release-prod.yml already implements).
+#
+# That is an app-repo/iac-registry decision, not a chart-packaging one, which is why this
+# pipeline reports the chart digest precisely and refuses to invent the image digest.
+# =============================================================================================

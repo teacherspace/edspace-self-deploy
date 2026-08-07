@@ -1,15 +1,30 @@
 name: Release
 
-# Tag vX.Y.Z == chart version. Publishes the chart as an OCI artifact to the
-# customer registry. Image publication is handled by the app repo's pipeline.
+# Tag vX.Y.Z == chart version. Validates the tag and cuts the GitHub release.
+#
+# NO REGISTRY ACCESS, deliberately. The chart is packaged and pushed to the
+# internal registry by azure-pipelines-chart.yml, where an ADO service
+# connection supplies AAD credentials per run. Publishing from here instead
+# would mean a standing registry username/password in this repo's secrets — on
+# a repo whose docs are customer handover material. The app repo's
+# release-prod.yml states the same rule for itself ("no build, no registry
+# access") and holds only SSH deploy keys.
+#
+# Neither pipeline is what reaches customers. The chart becomes visible to them
+# only when infrastructure/iac-registry's azure-pipelines-release.yml imports it
+# by digest into the customer registry, behind the Edspace-prod approval.
+#
+# The releasable-tag rules live in scripts/release-guard.sh because the ADO
+# pipeline enforces them too, and the two must not drift.
 
 on:
   push:
     tags: ["v*"]
 
-env:
-  REGISTRY: registry.edspace.io
-  CHART_REPO: edspace/charts
+# Least privilege. Creating the release is the only write this job needs; the
+# repo default is `write` for every scope, which this narrows.
+permissions:
+  contents: write
 
 jobs:
   release:
@@ -18,31 +33,39 @@ jobs:
       - uses: actions/checkout@v4
       - uses: astral-sh/setup-uv@v5
       - uses: azure/setup-helm@v4
+        with:
+          # Pinned, and must match ci.yaml and azure-pipelines-chart.yml. Left
+          # floating, the helm that validates the chart here and the helm that
+          # packages the artifact customers run there can differ by a major
+          # version without anything saying so.
+          version: v4.2.2
 
-      - name: Verify generated files and chart version match tag
-        run: |
-          uv run scripts/gen.py --check
-          CHART_VERSION=$(awk '/^version:/{print $2}' chart/edspace/Chart.yaml)
-          [ "v${CHART_VERSION}" = "${GITHUB_REF_NAME}" ] || {
-            echo "Chart.yaml version ${CHART_VERSION} != tag ${GITHUB_REF_NAME}"; exit 1; }
-          APP_VERSION=$(awk -F'"' '/^appVersion:/{print $2}' chart/edspace/Chart.yaml)
-          case "$APP_VERSION" in
-            ""|latest|*dev*) echo "Refusing release with unpinned appVersion: $APP_VERSION"; exit 1 ;;
-          esac
+      - name: Verify generated files are current
+        run: uv run scripts/gen.py --check
+
+      - name: Verify the tag is releasable
+        run: bash scripts/release-guard.sh "$GITHUB_REF_NAME"
 
       - name: Lint
         run: |
           for f in chart/edspace/ci/*.yaml; do helm lint chart/edspace -f "$f"; done
           bash scripts/test-chart-validation.sh
 
-      - name: Package and push chart (OCI)
-        run: |
-          helm registry login "$REGISTRY" -u "${{ secrets.REGISTRY_USERNAME }}" -p "${{ secrets.REGISTRY_PASSWORD }}"
-          helm package chart/edspace -d dist
-          helm push dist/edspace-*.tgz "oci://$REGISTRY/$CHART_REPO"
+      - name: Package chart
+        # Packaged, not pushed — this proves the chart packages cleanly before
+        # the ADO pipeline tries, and produces the release asset below.
+        run: helm package chart/edspace -d dist
 
       - name: GitHub release
-        uses: softprops/action-gh-release@v2
+        # Pinned to the v2 commit: this action runs in the same job as the
+        # repo's release token, and a moving tag is a supply-chain decision made
+        # by someone else.
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
+          # A convenience copy for inspecting what was tagged. NOT the artifact
+          # customers receive, and not necessarily byte-identical to it — gzip
+          # makes no promise that two `helm package` runs agree. What gets
+          # promoted is the chart azure-pipelines-chart.yml pushed, identified
+          # by the digest that pipeline reports.
           files: dist/edspace-*.tgz
           generate_release_notes: true

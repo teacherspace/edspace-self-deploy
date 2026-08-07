@@ -1,4 +1,0 @@
-{
-  "_comment": "Per-instance registry for the update train. Hand-maintained until the marketplace notification endpoint feeds this automatically (see ../README.md). ring: canary|broad. An empty canary ring fails closed.",
-  "instances": []
-}

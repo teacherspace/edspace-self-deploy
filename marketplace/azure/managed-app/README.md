@@ -4,8 +4,8 @@ Marketplace package that provisions a complete EdSpace instance in a managed
 resource group inside the customer's subscription: Container Apps environment
 + app, PostgreSQL Flexible Server, Blob storage, an instance Key Vault, and
 (optionally) Azure AI Foundry with EdSpace's model deployments. EdSpace (the
-publisher) retains operator access and rolls updates via the
-[update train](../update-train/).
+publisher) retains operator access and rolls updates from its internal release
+tooling.
 
 ## Build
 
@@ -39,8 +39,8 @@ will be authorized on the test definition; it rejects missing/zero values.
 | Operation | Mechanism | bootstrapSecrets |
 |---|---|---|
 | New install | Marketplace / Service Catalog | `true` (UI pins it) |
-| Routine app update | `az containerapp update --image <tag>` (update train) | n/a — template untouched |
-| Infra change to an existing instance | `az deployment group create` on the managed RG (update train) | **`false` — mandatory** |
+| Routine app update | `az containerapp update --image <tag>` | n/a — template untouched |
+| Infra change to an existing instance | `az deployment group create` on the managed RG | **`false` — mandatory** |
 | Marketplace definition version | New installs only — never pushed onto existing instances | — |
 
 Re-deploying an existing instance with `bootstrapSecrets=true` **rotates every
@@ -123,8 +123,8 @@ Parameter names mirror the env vars (camelCase ↔ SCREAMING_SNAKE) so a future
 - **Partner Center**: account, Azure Application offer + Managed Application
   plan; upload the same zip; configure authorizations + notification endpoint
   (an Azure Function appending `{applicationId, tenantId, managedRg, plan,
-  eventType}` to a storage table — feeds the update-train instance registry;
-  required before GA).
+  eventType}` to a storage table — feeds the instance registry used by the
+  internal release tooling; required before GA).
 - **Model catalog versions** for gpt-5.4 / gpt-5-mini / text-embedding-3-small
   (empty = platform default; pin before first publish).
 - Registry credential distribution flow to customers (welcome email vs

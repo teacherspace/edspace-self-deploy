@@ -74,7 +74,7 @@ Put a TLS-terminating reverse proxy in front before exposing it publicly. Full g
 
 ### Azure Marketplace
 
-For turnkey Azure customers, EdSpace is available as an **Azure Managed Application**: it deploys into your Azure subscription (Azure Container Apps + Azure Database for PostgreSQL), while EdSpace operates version updates through a managed update train. You provide the LLM and mailer credentials at deploy time through the marketplace UI.
+For turnkey Azure customers, EdSpace is available as an **Azure Managed Application**: it deploys into your Azure subscription (Azure Container Apps + Azure Database for PostgreSQL), while EdSpace operates version updates for you. You provide the LLM and mailer credentials at deploy time through the marketplace UI.
 
 Note: the managed application currently runs a single app replica and scales vertically ([docs/limitations.md](docs/limitations.md)).
 
@@ -180,7 +180,6 @@ Redirect URIs follow `https://<PHX_HOST>/auth/<provider>/callback`.
 | `EDSPACE_PLATFORM_ADMINS` | Comma-separated emails granted platform-admin on reconciliation — used to bootstrap the first admin (see [Manual user creation](#manual-user-creation)) | — | first install |
 | `PDF_ENABLED` | Headless-Chromium PDF export | `true` | no |
 | `CHROMIC_PDF_POOL_SIZE` | Concurrent Chromium sessions (memory cost each) | `4` | no |
-| `LINEAR_API_KEY` + `LINEAR_*` | Forward in-app feedback to a Linear team (**secret** key); empty disables | — | no |
 | `DEBUG_AUTH_FAILURES` | Log detailed SSO failure reasons — may log personal data, troubleshooting only | `false` | no |
 
 A further set of internal tuning variables (pool/timeout/BEAM settings, listed at the end of [docs/env-vars.md](docs/env-vars.md)) should only be changed under guidance from EdSpace support.

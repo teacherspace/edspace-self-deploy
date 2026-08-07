@@ -68,7 +68,7 @@ config/contract.yaml     Single source of truth for all app environment variable
 scripts/gen.py           Generates .env.example, values.schema.json, docs/env-vars.md from the contract.
 chart/edspace/           Customer-facing Helm chart (published as OCI).
 compose/                 Docker Compose deployment.
-marketplace/azure/       Azure Marketplace Managed Application + update train (vendor-operated).
+marketplace/azure/       Azure Marketplace Managed Application (vendor-operated).
 docs/                    Install and operations documentation.
 ```
 
