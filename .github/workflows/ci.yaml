@@ -77,5 +77,9 @@ jobs:
       - name: shellcheck
         run: |
           sudo apt-get update -qq && sudo apt-get install -y shellcheck
-          shellcheck scripts/*.sh marketplace/azure/managed-app/*.sh \
+          # --severity=warning: the runner's apt shellcheck lags the version
+          # devs run locally, and older releases emit info-level notes (SC2015
+          # on intentional `guard && check || die`) that newer ones dropped.
+          # Gating on warning+ keeps CI reproducible across that skew.
+          shellcheck --severity=warning scripts/*.sh marketplace/azure/managed-app/*.sh \
             marketplace/azure/managed-app/test/*.sh
