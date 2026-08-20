@@ -29,8 +29,8 @@ helm install edspace oci://edspace.azurecr.io/edspace/charts/edspace \
   --set db.bundled.enabled=true \
   --set llm.apiKey=<llm-api-key> \
   --set llm.baseUrl=https://<your-endpoint>.cognitiveservices.azure.com/ \
-  --set llm.textDeployment=gpt-5.4 \
-  --set llm.smallDeployment=gpt-5-mini \
+  --set llm.textDeployment=gpt-5.6-sol \
+  --set llm.smallDeployment=gpt-5.6-luna \
   --set llm.embeddingDeployment=text-embedding-3-small \
   --set mailer.mailpaceApiKey=<mailpace-key> \
   --set mailer.fromEmail=noreply@example.org \

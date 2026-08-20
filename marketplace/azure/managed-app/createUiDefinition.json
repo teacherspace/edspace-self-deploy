@@ -82,7 +82,7 @@
             "visible": "[steps('ai').enableAzureAi]",
             "options": {
               "icon": "Warning",
-              "text": "Model deployments draw on YOUR subscription's Azure OpenAI quota in the selected region. If deployment fails with a quota error, request quota for gpt-5.4, gpt-5-mini and text-embedding-3-small, or lower the capacities below.",
+              "text": "EdSpace deploys 8 models so every model your school admins can pick in AI settings works: gpt-5.1, gpt-5.4, gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna, gpt-5-mini, Mistral-Large-3 and text-embedding-3-small. Each draws on YOUR subscription's quota in the selected region, from its own per-model bucket. If deployment fails with a quota error, request quota for the model named in the error, or lower the capacities below.",
               "uri": "https://aka.ms/oai/quotaincrease"
             }
           },
@@ -105,10 +105,10 @@
           {
             "name": "textModelCapacity",
             "type": "Microsoft.Common.TextBox",
-            "label": "Text model capacity (K TPM)",
+            "label": "Chat model capacity (K TPM)",
             "visible": "[steps('ai').enableAzureAi]",
-            "defaultValue": "50",
-            "toolTip": "Thousands of tokens-per-minute for gpt-5.4.",
+            "defaultValue": "800",
+            "toolTip": "Thousands of tokens-per-minute, applied to each chat model (gpt-5.1, gpt-5.4, gpt-5.6-sol, gpt-5.6-terra, Mistral-Large-3). This is also a per-request ceiling: a single chat turn larger than this many thousand tokens \u2014 a long conversation plus a large attached document, for example \u2014 cannot be served at all, and will appear to hang. The default of 800 is sized so even the largest chat EdSpace can build is served. Lower it only if your subscription lacks the quota.",
             "constraints": {
               "required": true,
               "regex": "^[1-9][0-9]{0,3}$",
@@ -120,8 +120,8 @@
             "type": "Microsoft.Common.TextBox",
             "label": "Small model capacity (K TPM)",
             "visible": "[steps('ai').enableAzureAi]",
-            "defaultValue": "50",
-            "toolTip": "Thousands of tokens-per-minute for gpt-5-mini.",
+            "defaultValue": "200",
+            "toolTip": "Thousands of tokens-per-minute, applied to each background model used for titles, classification and reranking (gpt-5.6-luna, gpt-5-mini).",
             "constraints": {
               "required": true,
               "regex": "^[1-9][0-9]{0,3}$",

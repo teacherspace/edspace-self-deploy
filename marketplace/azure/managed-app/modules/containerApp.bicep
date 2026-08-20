@@ -61,6 +61,15 @@ param llmBaseUrl string
 param llmTextDeployment string
 param llmSmallDeployment string
 param llmEmbeddingDeployment string
+// Model IDs are set only on the managed-AI path, where we know which model each
+// deployment serves. Leaving them empty (the BYO path) lets the app's own defaults
+// apply, since a customer's endpoint may serve something else entirely. Setting the
+// deployment without the matching ID is the bug this closes: the app would keep its
+// default model ID, and capability gating, pricing and Langfuse telemetry would all
+// be keyed to a model that never receives a request.
+param llmTextModel string = ''
+param llmSmallModel string = ''
+param llmEmbeddingModel string = ''
 param llmApiVersion string = ''
 
 // --- speech (plain) ---
@@ -124,6 +133,9 @@ var secretEnv = [
 
 var conditionalEnv = concat(
   empty(llmApiVersion) ? [] : [{ name: 'EDSPACE_LLM_API_VERSION', value: llmApiVersion }],
+  empty(llmTextModel) ? [] : [{ name: 'EDSPACE_LLM_TEXT_MODEL', value: llmTextModel }],
+  empty(llmSmallModel) ? [] : [{ name: 'EDSPACE_LLM_SMALL_MODEL', value: llmSmallModel }],
+  empty(llmEmbeddingModel) ? [] : [{ name: 'EDSPACE_LLM_EMBEDDING_MODEL', value: llmEmbeddingModel }],
   empty(speechRegion) ? [] : [{ name: 'AZURE_SPEECH_REGION', value: speechRegion }],
   empty(speechKey) ? [] : [{ name: 'AZURE_SPEECH_KEY', secretRef: 'azure-speech-key' }],
   // Omitted when blank: a set-but-empty MAILER_FROM_NAME would override the

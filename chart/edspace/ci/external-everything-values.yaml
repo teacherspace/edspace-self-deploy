@@ -29,8 +29,8 @@ storage:
 llm:
   existingSecret: my-llm-credentials
   baseUrl: https://example.openai.azure.com/
-  textDeployment: gpt-5.4
-  smallDeployment: gpt-5-mini
+  textDeployment: gpt-5.6-sol
+  smallDeployment: gpt-5.6-luna
   embeddingDeployment: text-embedding-3-small
 mailer:
   fromEmail: noreply@example.org

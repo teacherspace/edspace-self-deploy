@@ -76,9 +76,38 @@ Don't.
   TODO(edspace): validate against the app's Postgrex TLS handling; fallback is
   a `require_secure_transport=off` server configuration until app-side DB TLS
   lands.
+- **Model set is driven by the app, not by this template**: `Edspace.LLM.Models`
+  (`lib/edspace/llm/models.ex`) is a hardcoded registry populating the school-admin
+  text-model dropdown and the backoffice small-model default. Every deployment name
+  in it must exist on the account, or an admin selecting it gets an
+  unknown-deployment failure with nothing in the install explaining why. The
+  template deploys all 8: `gpt-5.1`, `gpt-5.4`, `gpt-5.6-sol`, `gpt-5.6-terra`
+  (text + small), `gpt-5.6-luna`, `gpt-5-mini`, `Mistral-Large-3`,
+  `text-embedding-3-small`. Adding a model to the app registry means adding it here.
+  `infrastructure/iac-ai-foundry` deploys the same set plus `gpt-5.5` and
+  `text-embedding-3-large`; both are omitted here because no app code path reaches
+  them and each would draw customer quota for nothing.
 - **AI quota gotcha**: GlobalStandard model deployments draw on the
   *customer subscription's* quota in `aiLocation`. Deployment fails without
   quota — the UI warns and links the increase form; capacities are parameters.
+  Quota is per-model, so 8 deployments means 8 buckets, not one shared pool.
+  All 8 have a GlobalStandard bucket in `swedencentral`, verified live on
+  2026-08-20 against both EdSpace subscriptions with
+  `az cognitiveservices usage list -l swedencentral`. Note `Mistral-Large-3`
+  quota lives under the `AIServices.` family, not `OpenAI.` — consistent with its
+  `Mistral AI` format string. Observed limits there were 10,000 K-TPM per model
+  (30,000 for `gpt-5.1`), all unallocated, which is what the template's modest
+  per-model asks are sized against. A customer subscription may differ; SKU stays
+  per-entry in `modelDeployments` so a region/SKU miss is a one-line fix.
+- **Capacity is a per-request ceiling**, not only a throughput knob. A deployment
+  at capacity N rejects any single request over N*1,000 tokens however long it
+  waits, and the chat streamer parks instead of erroring. Internal production hit
+  this on 2026-07-31 at capacity 50 (a turn with a 23 MB PDF was ~127 K tokens).
+  Defaults are 800 K-TPM chat / 200 small / 100 embedding. 800 is derived, not
+  guessed: `ContextRag.Budget` bounds one turn at 400 K reference + 1.2 M history
+  + ~122 K tool chars, which at its 2.7 chars/token ratio is ~654 K input tokens
+  plus up to 128 K reserved output — ~780 K-TPM for a single worst-case turn.
+  Lower values narrow the hang window rather than closing it.
 - **Publisher access** is configured as a Partner Center plan authorization,
   not as a customer Key Vault policy. Managed-app operations use the
   publisher-tenant identity's projected control-plane access to the managed
@@ -125,7 +154,11 @@ Parameter names mirror the env vars (camelCase ↔ SCREAMING_SNAKE) so a future
   (an Azure Function appending `{applicationId, tenantId, managedRg, plan,
   eventType}` to a storage table — feeds the instance registry used by the
   internal release tooling; required before GA).
-- **Model catalog versions** for gpt-5.4 / gpt-5-mini / text-embedding-3-small
-  (empty = platform default; pin before first publish).
+- **Model catalog versions**: RESOLVED — every entry in `modelDeployments` pins an
+  explicit version, taken from `infrastructure/iac-ai-foundry` (verified against the
+  live swedencentral catalog; gpt-5.6-* on 2026-07-20, gpt-5-mini on 2026-07-23,
+  text-embedding-3-small on 2026-07-27). Still unverified for `westeurope` /
+  `eastus`, which the UI also offers — re-check with
+  `az cognitiveservices model list -l <region> -o table` before first publish.
 - Registry credential distribution flow to customers (welcome email vs
   automated provisioning).

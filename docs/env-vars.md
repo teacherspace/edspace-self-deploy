@@ -46,9 +46,9 @@ Variables marked *managed* are composed by the deployment packaging
 | `EDSPACE_LLM_API_KEY` | yes |  | yes | API key for the configured LLM provider. Effectively required — the product's core features depend on it. (The Azure-style fallbacks AZURE_OPENAI_API_KEY / AZURE_API_KEY are also honoured.) |
 | `EDSPACE_LLM_BASE_URL` | no |  |  | Provider base URL. Required for azure (your Azure OpenAI / AI Foundry endpoint); usually left empty for public providers. |
 | `EDSPACE_LLM_API_VERSION` | no |  |  | Azure OpenAI API version, when the provider is azure. |
-| `EDSPACE_LLM_TEXT_MODEL` | no | azure:gpt-5.4 |  | Main text model, "provider:model" form. |
+| `EDSPACE_LLM_TEXT_MODEL` | no | azure:gpt-5.6-sol |  | Main text model, "provider:model" form. |
 | `EDSPACE_LLM_TEXT_DEPLOYMENT` | no |  |  | Azure deployment name serving the main text model (azure only). |
-| `EDSPACE_LLM_SMALL_MODEL` | no | azure:gpt-5-mini |  | Small/fast model for lightweight tasks, "provider:model" form. |
+| `EDSPACE_LLM_SMALL_MODEL` | no | azure:gpt-5.6-luna |  | Small/fast model for lightweight tasks, "provider:model" form. |
 | `EDSPACE_LLM_SMALL_DEPLOYMENT` | no |  |  | Azure deployment name serving the small model (azure only). |
 | `EDSPACE_LLM_EMBEDDING_MODEL` | no | azure:text-embedding-3-small |  | Embedding model for retrieval/RAG, "provider:model" form. Must produce 1536-dimension vectors (database schema is fixed to 1536). |
 | `EDSPACE_LLM_EMBEDDING_DEPLOYMENT` | no |  |  | Azure deployment name serving the embedding model (azure only). |

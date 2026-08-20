@@ -125,12 +125,37 @@ Variables marked **Secret** belong in secret storage (`envSecret` / Kubernetes S
 | `EDSPACE_LLM_API_KEY` | Provider API key (**secret**) | — | yes |
 | `EDSPACE_LLM_BASE_URL` | Provider base URL (your Azure OpenAI endpoint; empty for public providers) | — | azure only |
 | `EDSPACE_LLM_API_VERSION` | Azure OpenAI API version | — | no |
-| `EDSPACE_LLM_TEXT_MODEL` | Main text model, `provider:model` form | `azure:gpt-5.4` | no |
+| `EDSPACE_LLM_TEXT_MODEL` | Main text model, `provider:model` form | `azure:gpt-5.6-sol` | no |
 | `EDSPACE_LLM_TEXT_DEPLOYMENT` | Azure deployment name for the text model | — | azure only |
-| `EDSPACE_LLM_SMALL_MODEL` | Small/fast model for lightweight tasks | `azure:gpt-5-mini` | no |
+| `EDSPACE_LLM_SMALL_MODEL` | Small/fast model for lightweight tasks | `azure:gpt-5.6-luna` | no |
 | `EDSPACE_LLM_SMALL_DEPLOYMENT` | Azure deployment name for the small model | — | azure only |
 | `EDSPACE_LLM_EMBEDDING_MODEL` | Embedding model — must produce 1536-dim vectors | `azure:text-embedding-3-small` | no |
 | `EDSPACE_LLM_EMBEDDING_DEPLOYMENT` | Azure deployment name for the embedding model | — | azure only |
+
+#### Which model deployments to create
+
+The three `*_DEPLOYMENT` settings above only pin the **defaults**. EdSpace also lets a
+school admin switch the chat model from the in-app AI settings page, and the dropdown
+is a fixed list — a model your provider doesn't serve appears in the menu but fails on
+the next message. On Azure, create a deployment whose name matches each of these
+exactly (names are case-sensitive):
+
+| Deployment | Role | Notes |
+|---|---|---|
+| `gpt-5.6-sol` | chat (default) | |
+| `gpt-5.6-terra` | chat, and selectable as the small model | |
+| `gpt-5.1` | chat | |
+| `gpt-5.4` | chat | |
+| `Mistral-Large-3` | chat | text-only; no image attachments |
+| `gpt-5.6-luna` | small / background (default) | titles, classification, reranking |
+| `gpt-5-mini` | small / background | |
+| `text-embedding-3-small` | embeddings | must be 1536-dimension |
+
+Only the two defaults plus the embedding model are needed to run. Deploy the rest to
+make every entry in the admin dropdown work. Size each chat deployment's capacity
+against your **largest single turn**, not average load: on Azure a deployment rated
+at N thousand tokens-per-minute cannot serve any single request larger than that, and
+a long conversation with a large PDF attached will exceed a small quota outright.
 
 ### Mailer
 

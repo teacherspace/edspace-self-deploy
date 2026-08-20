@@ -317,7 +317,7 @@ vars:
     category: llm
     description: Main text model, "provider:model" form.
     type: string
-    default: { app: "azure:gpt-5.4" }
+    default: { app: "azure:gpt-5.6-sol" }
     required: false
     secret: false
     tier: core
@@ -331,13 +331,13 @@ vars:
     secret: false
     tier: core
     source: user
-    example: gpt-5.4
+    example: gpt-5.6-sol
 
   - name: EDSPACE_LLM_SMALL_MODEL
     category: llm
     description: Small/fast model for lightweight tasks, "provider:model" form.
     type: string
-    default: { app: "azure:gpt-5-mini" }
+    default: { app: "azure:gpt-5.6-luna" }
     required: false
     secret: false
     tier: advanced
@@ -351,7 +351,7 @@ vars:
     secret: false
     tier: core
     source: user
-    example: gpt-5-mini
+    example: gpt-5.6-luna
 
   - name: EDSPACE_LLM_EMBEDDING_MODEL
     category: llm
