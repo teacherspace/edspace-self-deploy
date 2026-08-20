@@ -17,8 +17,8 @@ One stateless application container, horizontally scalable, in front of a Postgr
 | **PostgreSQL** | Yes | ≥ 16.3 with the `vector` (pgvector), `citext`, and `pg_trgm` extensions. Embeddings are stored in Postgres — no separate vector database. Use managed Postgres in production; a bundled evaluation-only Postgres is available. See [docs/database.md](docs/database.md). |
 | **LLM / embedding provider** | Yes | Azure OpenAI by default; OpenAI, Anthropic, Google, Mistral, and others are supported. The embedding model must produce **1536-dimension** vectors. |
 | **Mailer (MailPace)** | Yes | Transactional email (magic links, invitations, password resets) via the MailPace HTTP API. Currently the only supported provider — the app refuses to boot without an API key ([docs/limitations.md](docs/limitations.md)). |
-| **Langfuse** | Yes (for AI features) | EdSpace's system prompts are managed in Langfuse and fetched at runtime (cached in-process; there is no bundled prompt fallback), so AI features need a reachable Langfuse with the EdSpace prompt set installed. The same connection provides LLM tracing and per-user cost visibility. Point it at a Langfuse instance you operate or Langfuse Cloud. |
 | **File storage** | Yes (pick one) | `local_disk` (persistent volume, default) or `azure_blob` (Azure Blob Storage) for uploads, chat attachments and logos. S3-compatible storage is not available yet. |
+| **Langfuse** | Optional | LLM tracing and per-user cost visibility. When configured, every LLM call is traced to a Langfuse instance you operate (or Langfuse Cloud); leave the `LANGFUSE_*` settings empty to run without tracing. |
 | **Azure Speech** | Optional | Speech-to-text / text-to-speech. Self-deploy packaging defaults speech **off**; enable it when you have an Azure Cognitive Services Speech resource. |
 | **SSO providers** | Optional | Microsoft Entra ID, UniLogin, and Praxis sign-in via OIDC — see [User Authentication](#user-authentication). |
 
@@ -140,13 +140,15 @@ Variables marked **Secret** belong in secret storage (`envSecret` / Kubernetes S
 | `MAILER_FROM_EMAIL` | From address (must be verified in MailPace) | — | yes |
 | `MAILER_FROM_NAME` | From display name | `EdSpace` | no |
 
-### Langfuse
+### Langfuse (optional)
+
+Tracing activates only when all three of `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, and `LANGFUSE_HOST` are set; leave them empty to run without tracing.
 
 | Name | Description | Default | Required |
 |---|---|---|---|
-| `LANGFUSE_PUBLIC_KEY` | Langfuse public key | — | yes |
-| `LANGFUSE_SECRET_KEY` | Langfuse secret key (**secret**) | — | yes |
-| `LANGFUSE_HOST` | Langfuse host — drives both prompt fetching and trace export | — | yes |
+| `LANGFUSE_PUBLIC_KEY` | Langfuse public key | — | no |
+| `LANGFUSE_SECRET_KEY` | Langfuse secret key (**secret**) | — | no |
+| `LANGFUSE_HOST` | Langfuse host receiving OpenTelemetry traces | — | no |
 | `LANGFUSE_ENVIRONMENT` / `LANGFUSE_RELEASE` | Environment / version tags on emitted traces | — | no |
 | `EDSPACE_OTEL_LLM_PAYLOADS` | `raw` includes prompt/completion text in traces; set `none` when traces leave your infrastructure | `raw` | no |
 
@@ -256,7 +258,7 @@ The app instruments HTTP requests, database queries, background jobs, and BEAM V
 
 Every LLM call emits OpenTelemetry spans following the [GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) (`gen_ai.client.inference`), with each chat turn grouped into a single trace — including retrieval, reranking, tool executions, and token/cost usage — and attributed to user and session.
 
-Traces export to your **Langfuse** instance over OTLP using the same `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` settings the app already needs for prompts. This gives you per-user and per-session cost, latency, and quality visibility into all generative AI usage.
+Traces export to a **Langfuse** instance over OTLP when `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` / `LANGFUSE_HOST` are configured (optional — see [Langfuse](#langfuse-optional)). This gives you per-user and per-session cost, latency, and quality visibility into all generative AI usage.
 
 Privacy note: by default traces include prompt and completion text (`EDSPACE_OTEL_LLM_PAYLOADS=raw`). Set it to `none` if traces leave your infrastructure or must not contain user content.
 
