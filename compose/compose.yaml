@@ -11,7 +11,7 @@ name: edspace
 
 services:
   app:
-    image: ${EDSPACE_IMAGE:-registry.edspace.io/edspace/edspace}:${EDSPACE_IMAGE_TAG:?set a release tag in .env}
+    image: ${EDSPACE_IMAGE:-edspace.azurecr.io/edspace/edspace}:${EDSPACE_IMAGE_TAG:?set a release tag in .env}
     restart: unless-stopped
     env_file: .env
     environment:
@@ -64,7 +64,7 @@ services:
   # boot (bin/server), and seeding needs the migrated schema.
   seed:
     profiles: [seed]
-    image: ${EDSPACE_IMAGE:-registry.edspace.io/edspace/edspace}:${EDSPACE_IMAGE_TAG:?set a release tag in .env}
+    image: ${EDSPACE_IMAGE:-edspace.azurecr.io/edspace/edspace}:${EDSPACE_IMAGE_TAG:?set a release tag in .env}
     command: ["/app/bin/seed"]
     env_file: .env
     environment:

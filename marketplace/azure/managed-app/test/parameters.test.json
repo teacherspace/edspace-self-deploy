@@ -12,7 +12,7 @@
     "mailpaceApiKey": { "value": "test-dummy-mailpace-key" },
     "registryUsername": { "value": "test-customer" },
     "registryPassword": { "value": "test-dummy-registry-token" },
-    "containerImage": { "value": "registry.edspace.io/edspace/edspace:v0.0.0-test" },
+    "containerImage": { "value": "edspace.azurecr.io/edspace/edspace:v0.0.0-test" },
     "bootstrapSecrets": { "value": true }
   }
 }

@@ -82,7 +82,7 @@ param mailFromEmail string
 param mailFromName string = 'EdSpace'
 
 // ------------------------------------------------------------------- license
-param registryServer string = 'registry.edspace.io'
+param registryServer string = 'edspace.azurecr.io'
 param registryUsername string
 @secure()
 param registryPassword string = ''

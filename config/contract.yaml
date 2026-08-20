@@ -1117,7 +1117,7 @@ vars:
     category: deploy
     description: App image reference (compose only).
     type: string
-    default: { compose: registry.edspace.io/edspace/edspace }
+    default: { compose: edspace.azurecr.io/edspace/edspace }
     required: false
     secret: false
     tier: advanced

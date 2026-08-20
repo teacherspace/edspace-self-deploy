@@ -11,7 +11,7 @@ app:
 
 image:
   # -- App image. Overridable for air-gapped mirrors.
-  repository: registry.edspace.io/edspace/edspace
+  repository: edspace.azurecr.io/edspace/edspace
   # -- Image tag; defaults to the chart appVersion.
   tag: ""
   # -- Image pull policy.
@@ -24,7 +24,7 @@ registryCredentials:
   # -- Render a dockerconfigjson pull Secret from the credentials below.
   enabled: false
   # -- Registry host the credentials apply to.
-  registry: registry.edspace.io
+  registry: edspace.azurecr.io
   # -- Per-customer registry username.
   username: ""
   # -- Per-customer registry token.

@@ -65,7 +65,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build managed-app template
         env:
-          EDSPACE_CONTAINER_IMAGE: registry.edspace.io/edspace/edspace:v0.0.0-ci
+          EDSPACE_CONTAINER_IMAGE: edspace.azurecr.io/edspace/edspace:v0.0.0-ci
         run: |
           az bicep install
           cd marketplace/azure/managed-app && ./build.sh --no-zip

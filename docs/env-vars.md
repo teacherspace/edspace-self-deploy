@@ -122,7 +122,7 @@ Variables marked *managed* are composed by the deployment packaging
 | Variable | Required | Default | Secret | Description |
 |---|---|---|---|---|
 | `POSTGRES_PASSWORD` | compose |  | yes | Password for the bundled Postgres (compose only). Feeds the composed DATABASE_URL. Generate with scripts/generate-secrets.sh. |
-| `EDSPACE_IMAGE` | no | registry.edspace.io/edspace/edspace |  | App image reference (compose only). |
+| `EDSPACE_IMAGE` | no | edspace.azurecr.io/edspace/edspace |  | App image reference (compose only). |
 | `EDSPACE_IMAGE_TAG` | compose |  |  | App image tag (compose only). Pin to a release tag. |
 | `EDSPACE_PORT` | no | 4000 |  | Host port the app is published on (compose only). |
 

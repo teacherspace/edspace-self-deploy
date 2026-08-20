@@ -10,7 +10,7 @@ For pilots, evaluations and small single-host installs. Postgres (with pgvector)
 ## Setup
 
 ```sh
-docker login registry.edspace.io -u <user> -p <token>
+docker login edspace.azurecr.io -u <user> -p <token>
 cd compose
 cp .env.example .env
 ../scripts/generate-secrets.sh >> .env   # SECRET_KEY_BASE, TOKEN_SIGNING_SECRET, POSTGRES_PASSWORD

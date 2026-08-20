@@ -10,7 +10,7 @@
 ## Install
 
 ```sh
-helm registry login registry.edspace.io -u <user> -p <token>
+helm registry login edspace.azurecr.io -u <user> -p <token>
 ```
 
 Minimal evaluation values (`values.eval.yaml`):
@@ -50,7 +50,7 @@ ingress:
 ```
 
 ```sh
-helm install edspace oci://registry.edspace.io/edspace/charts/edspace \
+helm install edspace oci://edspace.azurecr.io/edspace/charts/edspace \
   --version <chart-version> -n edspace --create-namespace -f values.eval.yaml \
   --wait --timeout 15m
 helm test edspace -n edspace
@@ -69,7 +69,7 @@ helm test edspace -n edspace
 ## Upgrades
 
 ```sh
-helm upgrade edspace oci://registry.edspace.io/edspace/charts/edspace \
+helm upgrade edspace oci://edspace.azurecr.io/edspace/charts/edspace \
   --version <new-version> -n edspace -f values.yaml
 ```
 

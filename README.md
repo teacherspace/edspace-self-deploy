@@ -14,13 +14,13 @@ There are three supported paths:
 
 - **Kubernetes**: 1.27+, an ingress controller, PostgreSQL ≥ 16.3 with the `vector` (pgvector), `citext`, and `pg_trgm` extensions available (or the bundled eval-only Postgres). See [docs/database.md](docs/database.md).
 - **Compose**: a Docker host with ≥ 4 CPU / 8 GiB; Postgres is bundled.
-- Registry access: images and the Helm chart are pulled from `registry.edspace.io` with the per-customer credentials you received from EdSpace (one token covers `docker login`, `helm registry login`, and Kubernetes pull secrets).
+- Registry access: images and the Helm chart are pulled from `edspace.azurecr.io` with the per-customer credentials you received from EdSpace (one token covers `docker login`, `helm registry login`, and Kubernetes pull secrets).
 
 ## Quickstart (Kubernetes)
 
 ```sh
-helm registry login registry.edspace.io -u <customer-user> -p <token>
-helm install edspace oci://registry.edspace.io/edspace/charts/edspace \
+helm registry login edspace.azurecr.io -u <customer-user> -p <token>
+helm install edspace oci://edspace.azurecr.io/edspace/charts/edspace \
   --version <chart-version> \
   --set app.host=edspace.example.org \
   --set registryCredentials.enabled=true \

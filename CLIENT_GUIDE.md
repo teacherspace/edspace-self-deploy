@@ -34,11 +34,11 @@ Three supported paths, by increasing operational involvement on your side:
 
 ### Registry
 
-Container images and the Helm chart are distributed from **`registry.edspace.io`**. You receive per-customer credentials (username + token) from EdSpace; the same token covers all three uses:
+Container images and the Helm chart are distributed from **`edspace.azurecr.io`**. You receive per-customer credentials (username + token) from EdSpace; the same token covers all three uses:
 
 ```sh
-docker login registry.edspace.io -u <user> -p <token>          # Compose image pulls
-helm registry login registry.edspace.io -u <user> -p <token>   # Chart pulls
+docker login edspace.azurecr.io -u <user> -p <token>          # Compose image pulls
+helm registry login edspace.azurecr.io -u <user> -p <token>   # Chart pulls
 # Kubernetes image pull secrets: set registryCredentials.* chart values
 ```
 
@@ -46,11 +46,11 @@ Always pin a release tag — never deploy `latest`. See [CHANGELOG.md](CHANGELOG
 
 ### Kubernetes
 
-The Helm chart at `oci://registry.edspace.io/edspace/charts/edspace` is the production-grade path: rolling upgrades with a pre-upgrade migration job, multi-replica BEAM clustering, HPA/PDB support, and schema-validated configuration.
+The Helm chart at `oci://edspace.azurecr.io/edspace/charts/edspace` is the production-grade path: rolling upgrades with a pre-upgrade migration job, multi-replica BEAM clustering, HPA/PDB support, and schema-validated configuration.
 
 ```sh
-helm registry login registry.edspace.io -u <user> -p <token>
-helm install edspace oci://registry.edspace.io/edspace/charts/edspace \
+helm registry login edspace.azurecr.io -u <user> -p <token>
+helm install edspace oci://edspace.azurecr.io/edspace/charts/edspace \
   --version <chart-version> -f values.yaml --wait --timeout 15m
 ```
 
@@ -61,7 +61,7 @@ You need Kubernetes 1.27+, an ingress controller, and an external PostgreSQL for
 The quickest way to evaluate EdSpace on a single host (≥ 4 CPU / 8 GiB). Postgres with pgvector is bundled; uploads go to a local volume.
 
 ```sh
-docker login registry.edspace.io -u <user> -p <token>
+docker login edspace.azurecr.io -u <user> -p <token>
 cd compose
 cp .env.example .env
 ../scripts/generate-secrets.sh >> .env   # SECRET_KEY_BASE, TOKEN_SIGNING_SECRET, POSTGRES_PASSWORD

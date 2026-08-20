@@ -52,7 +52,7 @@ Kubernetes: `>=1.27.0-0`
 | extraEnvFrom | list | `[]` | Raw envFrom entries (customer-managed ConfigMaps/Secrets, ESO, CSI...). |
 | fullnameOverride | string | `""` |  |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
-| image.repository | string | `"registry.edspace.io/edspace/edspace"` | App image. Overridable for air-gapped mirrors. |
+| image.repository | string | `"edspace.azurecr.io/edspace/edspace"` | App image. Overridable for air-gapped mirrors. |
 | image.tag | string | `""` | Image tag; defaults to the chart appVersion. |
 | imagePullSecrets | list | `[]` | Pre-created image pull secrets, e.g. [{name: my-pull-secret}]. |
 | ingress.annotations | object | `{}` | Extra ingress annotations; the chart adds none by default. |
@@ -117,7 +117,7 @@ Kubernetes: `>=1.27.0-0`
 | probes.startup.periodSeconds | int | `5` |  |
 | registryCredentials.enabled | bool | `false` | Render a dockerconfigjson pull Secret from the credentials below. |
 | registryCredentials.password | string | `""` | Per-customer registry token. |
-| registryCredentials.registry | string | `"registry.edspace.io"` | Registry host the credentials apply to. |
+| registryCredentials.registry | string | `"edspace.azurecr.io"` | Registry host the credentials apply to. |
 | registryCredentials.username | string | `""` | Per-customer registry username. |
 | replicaCount | int | `1` | Number of app replicas. >1 requires clustering.enabled (default on) and non-local file storage (see storage.adapter). |
 | resources.limits.memory | string | `"2Gi"` |  |

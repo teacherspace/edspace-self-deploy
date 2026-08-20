@@ -10,7 +10,7 @@ tooling.
 ## Build
 
 ```sh
-export EDSPACE_CONTAINER_IMAGE=registry.edspace.io/edspace/edspace:v1.2.3
+export EDSPACE_CONTAINER_IMAGE=edspace.azurecr.io/edspace/edspace:v1.2.3
 ./build.sh            # dist/mainTemplate.json + createUiDefinition + view + zip
 ./build.sh --no-zip   # compile/package check without the zip
 ```
