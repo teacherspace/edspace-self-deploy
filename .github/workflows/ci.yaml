@@ -63,12 +63,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build managed-app template
-        env:
-          EDSPACE_CONTAINER_IMAGE: edspace.azurecr.io/edspace/edspace:v0.0.0-ci
+      # Builds with the committed image pin (container-image.txt) — the exact
+      # template customers deploy — and fails if azuredeploy.json is stale.
+      - name: Build managed-app template and verify committed azuredeploy.json
         run: |
           az bicep install
-          cd marketplace/azure/managed-app && ./build.sh --no-zip
+          cd marketplace/azure/managed-app && ./gen-azuredeploy.sh --check
+      # Same test suite marketplace certification runs, over the template AND
+      # the portal form. One skip: "URIs Should Be Properly Constructed"
+      # false-positives on the composed appUrl output and DATABASE_URL
+      # connection string (uri() cannot express scheme://user:pass@host?query).
+      - name: ARM-TTK on built template and portal form
+        shell: pwsh
+        run: |
+          git clone --depth 1 https://github.com/Azure/arm-ttk.git $env:RUNNER_TEMP/arm-ttk
+          Import-Module $env:RUNNER_TEMP/arm-ttk/arm-ttk/arm-ttk.psd1
+          $results = Test-AzTemplate -TemplatePath marketplace/azure/managed-app/dist -Skip 'URIs Should Be Properly Constructed'
+          $failed = @($results | Where-Object { -not $_.Passed })
+          $failed | ForEach-Object { Write-Host "FAIL [$($_.Group)] $($_.Name)"; $_.Errors | ForEach-Object { Write-Host "   $_" } }
+          if ($failed.Count -gt 0) { exit 1 }
+          Write-Host "ARM-TTK: all $($results.Count) tests passed"
 
   scripts:
     runs-on: ubuntu-latest

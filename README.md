@@ -8,6 +8,7 @@ There are three supported paths:
 |---|---|---|
 | **Helm chart** | Teams with a Kubernetes cluster (AKS, EKS, GKE, on-prem) | [`chart/edspace`](chart/edspace) — [install guide](docs/install-kubernetes.md) |
 | **Azure Managed Application** | Turnkey Azure customers via the Azure Marketplace; EdSpace operates updates | [`marketplace/azure`](marketplace/azure) |
+| **Deploy to Azure button** | Azure customers who deploy the same stack themselves and self-manage updates | [Quickstart (Azure — one-click)](#quickstart-azure--one-click) |
 | **Docker Compose** | Pilots, evaluations, small single-host installs | [`compose/`](compose) — [install guide](docs/install-compose.md) |
 
 ## Requirements
@@ -15,6 +16,57 @@ There are three supported paths:
 - **Kubernetes**: 1.27+, an ingress controller, PostgreSQL ≥ 16.3 with the `vector` (pgvector), `citext`, and `pg_trgm` extensions available (or the bundled eval-only Postgres). See [docs/database.md](docs/database.md).
 - **Compose**: a Docker host with ≥ 4 CPU / 8 GiB; Postgres is bundled.
 - Registry access: images and the Helm chart are pulled from `edspace.azurecr.io` with the per-customer credentials you received from EdSpace (one token covers `docker login`, `helm registry login`, and Kubernetes pull secrets).
+
+## Quickstart (Azure — one-click)
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fteacherspace%2Fedspace-self-deploy%2Fmain%2Fmarketplace%2Fazure%2Fmanaged-app%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fteacherspace%2Fedspace-self-deploy%2Fmain%2Fmarketplace%2Fazure%2Fmanaged-app%2FcreateUiDefinition.json)
+[![Visualize](https://raw.githubusercontent.com/Azure/azure-quickstart-templates/master/1-CONTRIBUTION-GUIDE/images/visualizebutton.svg)](http://armviz.io/#/?load=https%3A%2F%2Fraw.githubusercontent.com%2Fteacherspace%2Fedspace-self-deploy%2Fmain%2Fmarketplace%2Fazure%2Fmanaged-app%2Fazuredeploy.json)
+
+Deploys the same stack as the marketplace offer (Container Apps, PostgreSQL
+Flexible Server, Key Vault, storage, optional Azure AI Foundry) into a resource
+group **you** own — unlike the managed application, EdSpace does not operate
+updates for you (update with `az containerapp update --image <new tag>`).
+
+You will need:
+
+- the `edspace.azurecr.io` registry credentials from your EdSpace welcome email,
+- a [MailPace](https://mailpace.com) API key (transactional email is required),
+- if enabling Azure AI: available Azure OpenAI GlobalStandard quota in the AI region you pick.
+
+What gets deployed into your resource group:
+
+- **Container Apps**: a workload-profiles environment and the `edspace` app (single replica, sized by *App size*)
+- **PostgreSQL Flexible Server**: v16 with the extensions EdSpace needs; daily backups (retention and geo-redundancy are template parameters)
+- **Key Vault** (`kv-eds-<suffix>`): holds all generated and supplied secrets — purge protection on, see [docs/limitations.md](docs/limitations.md) before deleting/redeploying
+- **Storage account**: private `uploads` blob container for file storage
+- **Log Analytics**: receives the app's console logs (30-day retention)
+- **Azure AI Foundry** *(optional)*: AI account plus the 8 model deployments selectable in EdSpace's AI settings
+
+After deployment succeeds:
+
+1. Open the deployment's **Outputs** tab — `appUrl` is your instance's address (verify `GET /health` returns `ok`).
+2. Bootstrap the first admin (no self-service signup exists — a fresh install has no account that can log in):
+
+   ```sh
+   az containerapp update -n edspace -g <resource-group> \
+     --set-env-vars "EDSPACE_PLATFORM_ADMINS=admin@your-school.example"
+   az containerapp exec -n edspace -g <resource-group> \
+     --command 'bin/edspace rpc "Edspace.Accounts.AdminReconcilerWorker.enqueue()"'
+   ```
+
+   Then sign in at `appUrl` with that email (magic link — this is why MailPace must work). Full onboarding details: [CLIENT_GUIDE.md](CLIENT_GUIDE.md#manual-user-creation).
+3. To update later: `az containerapp update -n edspace -g <resource-group> --image edspace.azurecr.io/edspace/edspace:<new tag>`.
+
+Prefer the CLI over the portal? See "Deploy from the CLI" in
+[`marketplace/azure/managed-app/README.md`](marketplace/azure/managed-app/README.md),
+which ships an example parameters file.
+
+The portal form is defined by
+[`marketplace/azure/managed-app/createUiDefinition.json`](marketplace/azure/managed-app/createUiDefinition.json);
+the template source is
+[`mainTemplate.bicep`](marketplace/azure/managed-app/mainTemplate.bicep), and
+[`azuredeploy.json`](marketplace/azure/managed-app/azuredeploy.json) is its
+committed compiled copy (CI enforces freshness).
 
 ## Quickstart (Kubernetes)
 
@@ -84,6 +136,8 @@ make test-validation  # chart value-guard test suite
 make template         # render chart with default ci values
 make package          # helm package to dist/
 make bicep            # build the Azure managed-app template
+make bicep-gen        # regenerate the committed azuredeploy.json (Deploy button)
+make bicep-check      # verify azuredeploy.json is current (CI)
 make compose-config   # validate compose.yaml with example env
 ```
 

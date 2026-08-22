@@ -1,0 +1,33 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "registryUsername": {
+      "value": "REPLACE-with-username-from-your-EdSpace-welcome-email"
+    },
+    "registryPassword": {
+      "value": "REPLACE-with-password-from-your-EdSpace-welcome-email"
+    },
+    "mailpaceApiKey": {
+      "value": "REPLACE-with-your-MailPace-API-key"
+    },
+    "mailFromEmail": {
+      "value": "edspace@your-school.example"
+    },
+    "mailFromName": {
+      "value": "EdSpace"
+    },
+    "enableAzureAi": {
+      "value": true
+    },
+    "aiLocation": {
+      "value": "swedencentral"
+    },
+    "pgBackupRetentionDays": {
+      "value": 7
+    },
+    "pgGeoRedundantBackup": {
+      "value": false
+    }
+  }
+}

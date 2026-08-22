@@ -30,7 +30,7 @@
             "visible": true,
             "options": {
               "icon": "Info",
-              "text": "A PostgreSQL 16 Flexible Server is provisioned inside the managed resource group with 7-day backups. The Burstable tier fits most installations."
+              "text": "A PostgreSQL 16 Flexible Server is provisioned inside the managed resource group with daily backups (7-day retention by default; retention and geo-redundancy are template parameters for CLI deployments). The Burstable tier fits most installations."
             }
           },
           {
@@ -156,6 +156,7 @@
             "label": "Azure OpenAI endpoint URL",
             "visible": "[not(steps('ai').enableAzureAi)]",
             "placeholder": "https://my-openai.openai.azure.com/",
+            "toolTip": "The https:// endpoint of your Azure OpenAI (or compatible) resource.",
             "constraints": {
               "required": true,
               "regex": "^https://.+",
@@ -167,7 +168,7 @@
             "type": "Microsoft.Common.PasswordBox",
             "label": { "password": "API key", "confirmPassword": "Confirm API key" },
             "visible": "[not(steps('ai').enableAzureAi)]",
-            "options": { "hideConfirmation": true },
+            "toolTip": "API key of your Azure OpenAI resource (Keys and Endpoint blade).",
             "constraints": { "required": true }
           },
           {
@@ -176,7 +177,12 @@
             "label": "Text model deployment name",
             "visible": "[not(steps('ai').enableAzureAi)]",
             "placeholder": "gpt-5.4",
-            "constraints": { "required": true }
+            "toolTip": "Deployment on your endpoint that serves chat/text requests.",
+            "constraints": {
+              "required": true,
+              "regex": "^[a-zA-Z0-9._-]{1,64}$",
+              "validationMessage": "Deployment names use letters, digits, dots, hyphens and underscores (max 64)."
+            }
           },
           {
             "name": "byoLlmSmallDeployment",
@@ -184,7 +190,12 @@
             "label": "Small model deployment name",
             "visible": "[not(steps('ai').enableAzureAi)]",
             "placeholder": "gpt-5-mini",
-            "constraints": { "required": true }
+            "toolTip": "Deployment used for background work: titles, classification, reranking.",
+            "constraints": {
+              "required": true,
+              "regex": "^[a-zA-Z0-9._-]{1,64}$",
+              "validationMessage": "Deployment names use letters, digits, dots, hyphens and underscores (max 64)."
+            }
           },
           {
             "name": "byoLlmEmbeddingDeployment",
@@ -192,7 +203,12 @@
             "label": "Embedding model deployment name (1536 dimensions)",
             "visible": "[not(steps('ai').enableAzureAi)]",
             "placeholder": "text-embedding-3-small",
-            "constraints": { "required": true }
+            "toolTip": "Deployment serving the embedding model. Must produce 1536-dimensional vectors to match EdSpace's schema.",
+            "constraints": {
+              "required": true,
+              "regex": "^[a-zA-Z0-9._-]{1,64}$",
+              "validationMessage": "Deployment names use letters, digits, dots, hyphens and underscores (max 64)."
+            }
           },
           {
             "name": "byoLlmApiVersion",
@@ -200,7 +216,12 @@
             "label": "API version (optional)",
             "visible": "[not(steps('ai').enableAzureAi)]",
             "placeholder": "2024-10-21",
-            "constraints": { "required": false }
+            "toolTip": "Azure OpenAI api-version query value. Leave empty for the provider default.",
+            "constraints": {
+              "required": false,
+              "regex": "^$|^[0-9]{4}-[0-9]{2}-[0-9]{2}(-preview)?$",
+              "validationMessage": "Use the YYYY-MM-DD form, e.g. 2024-10-21, optionally with -preview."
+            }
           }
         ]
       },
@@ -236,14 +257,18 @@
             "type": "Microsoft.Common.TextBox",
             "label": "Email from name",
             "defaultValue": "EdSpace",
-            "constraints": { "required": false }
+            "toolTip": "Display name shown as the sender of EdSpace's emails.",
+            "constraints": {
+              "required": false,
+              "regex": "^$|^[^<>\"]{1,64}$",
+              "validationMessage": "Up to 64 characters, without angle brackets or double quotes."
+            }
           },
           {
             "name": "mailpaceApiKey",
             "type": "Microsoft.Common.PasswordBox",
             "label": { "password": "MailPace API key", "confirmPassword": "Confirm MailPace API key" },
             "toolTip": "EdSpace sends transactional email through MailPace (mailpace.com).",
-            "options": { "hideConfirmation": true },
             "constraints": { "required": true }
           }
         ]
@@ -265,13 +290,18 @@
             "name": "registryUsername",
             "type": "Microsoft.Common.TextBox",
             "label": "Registry username",
-            "constraints": { "required": true }
+            "toolTip": "Username from your EdSpace welcome email.",
+            "constraints": {
+              "required": true,
+              "regex": "^[a-zA-Z0-9._-]{1,100}$",
+              "validationMessage": "Use the username exactly as provided in your welcome email."
+            }
           },
           {
             "name": "registryPassword",
             "type": "Microsoft.Common.PasswordBox",
             "label": { "password": "Registry token", "confirmPassword": "Confirm registry token" },
-            "options": { "hideConfirmation": true },
+            "toolTip": "Registry token from your EdSpace welcome email.",
             "constraints": { "required": true }
           }
         ]

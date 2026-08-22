@@ -19,7 +19,10 @@
 
 targetScope = 'resourceGroup'
 
+@description('Location for all resources.')
 param location string = resourceGroup().location
+
+@description('Extra tags applied to every deployed resource (merged with the publisher marker tag).')
 param tags object = {}
 
 // ---------------------------------------------------------------- app sizing
@@ -31,16 +34,33 @@ param appSize string = 'standard'
 param containerImage string = '__EDSPACE_CONTAINER_IMAGE__'
 
 // ------------------------------------------------------------------ database
+@description('PostgreSQL Flexible Server compute SKU (e.g. Standard_B2s, Standard_D2ds_v5).')
 param pgSkuName string = 'Standard_B2s'
+
+@allowed(['Burstable', 'GeneralPurpose', 'MemoryOptimized'])
+@description('PostgreSQL compute tier; must match pgSkuName\'s family.')
 param pgSkuTier string = 'Burstable'
+
 // Upper bound is the platform maximum, NOT the UI's: storage auto-grows, and
 // vendor-operated template redeploys pass the server's CURRENT size back in.
+@description('PostgreSQL storage in GiB. Auto-grow is enabled; redeploys must pass the server\'s current size.')
 @minValue(32)
 @maxValue(32767)
 param pgStorageGB int = 32
 
+@description('Days PostgreSQL daily backups are retained.')
+@minValue(7)
+@maxValue(35)
+param pgBackupRetentionDays int = 7
+
+// Create-time only: Azure does not allow toggling geo-redundancy on an
+// existing flexible server, so redeploys must pass the original value.
+@description('Replicate PostgreSQL backups to the paired Azure region for cross-region restore (adds backup cost; can only be chosen at first deployment).')
+param pgGeoRedundantBackup bool = false
+
 // ------------------------------------------------------------------- storage
 @allowed(['Standard_LRS', 'Standard_GRS'])
+@description('Redundancy for the uploads storage account (LRS = single region, GRS = geo-replicated).')
 param storageSku string = 'Standard_LRS'
 
 // ------------------------------------------------------------------------ AI
@@ -84,15 +104,27 @@ param smallModelCapacity int = 200
 @description('TPM capacity (thousands) for the embedding model.')
 param embeddingModelCapacity int = 100
 
+@description('Enable voice features via Azure Speech on the AI account (only applies when enableAzureAi is true).')
 param enableSpeech bool = true
 
 // BYO LLM (used when enableAzureAi = false; expects an Azure OpenAI-compatible endpoint)
+@description('Base URL of your Azure OpenAI-compatible endpoint. Required when enableAzureAi is false; ignored otherwise.')
 param byoLlmBaseUrl string = ''
+
 @secure()
+@description('API key for the BYO LLM endpoint. Required when enableAzureAi is false.')
 param byoLlmApiKey string = ''
+
+@description('Deployment name serving chat/text models on the BYO endpoint.')
 param byoLlmTextDeployment string = ''
+
+@description('Deployment name serving small/background models on the BYO endpoint.')
 param byoLlmSmallDeployment string = ''
+
+@description('Deployment name serving the embedding model (1536 dimensions) on the BYO endpoint.')
 param byoLlmEmbeddingDeployment string = ''
+
+@description('API version query parameter for the BYO endpoint. Leave empty for the provider default.')
 param byoLlmApiVersion string = ''
 
 // --------------------------------------------------------------- application
@@ -100,14 +132,24 @@ param byoLlmApiVersion string = ''
 param customDomain string = ''
 
 @secure()
+@description('MailPace API key. Transactional email is required — invitations and magic-link sign-in depend on it.')
 param mailpaceApiKey string = ''
+
+@description('From address for all outgoing email (must be a verified MailPace domain).')
 param mailFromEmail string
+
+@description('Display name for outgoing email.')
 param mailFromName string = 'EdSpace'
 
 // ------------------------------------------------------------------- license
+@description('Container registry host serving the EdSpace image. Leave at the default unless EdSpace support directs otherwise.')
 param registryServer string = 'edspace.azurecr.io'
+
+@description('Per-customer registry username from your EdSpace welcome email.')
 param registryUsername string
+
 @secure()
+@description('Per-customer registry password/token from your EdSpace welcome email.')
 param registryPassword string = ''
 
 // ------------------------------------------------------------------- secrets
@@ -117,10 +159,15 @@ param bootstrapSecrets bool = true
 // newGuid() is only legal in parameter defaults. Two GUIDs minus dashes =
 // 64 chars, satisfying Phoenix's SECRET_KEY_BASE length requirement.
 @secure()
+@description('Entropy seed for the generated SECRET_KEY_BASE. Leave at the default; only read when bootstrapSecrets is true.')
 param secretKeyBaseSeed string = '${newGuid()}${newGuid()}'
+
 @secure()
+@description('Entropy seed for the generated TOKEN_SIGNING_SECRET. Leave at the default; only read when bootstrapSecrets is true.')
 param tokenSigningSeed string = newGuid()
+
 @secure()
+@description('Entropy seed for the generated PostgreSQL admin password. Leave at the default; only read when bootstrapSecrets is true.')
 param pgPasswordSeed string = newGuid()
 
 // ------------------------------------------------------------------- naming
@@ -137,7 +184,7 @@ var aiAccountName = 'aif-edspace-${suffix}'
 var storageContainerName = 'uploads'
 
 // ------------------------------------------------------------ observability
-resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2023-09-01' = {
+resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2025-02-01' = {
   name: logAnalyticsName
   location: location
   tags: resourceTags
@@ -172,7 +219,7 @@ resource acaEnv 'Microsoft.App/managedEnvironments@2025-01-01' = {
 }
 
 // ------------------------------------------------------------------- storage
-resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
+resource storage 'Microsoft.Storage/storageAccounts@2025-01-01' = {
   name: storageAccountName
   location: location
   tags: resourceTags
@@ -194,12 +241,12 @@ resource storage 'Microsoft.Storage/storageAccounts@2023-05-01' = {
   }
 }
 
-resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2023-05-01' = {
+resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2025-01-01' = {
   parent: storage
   name: 'default'
 }
 
-resource uploadsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2023-05-01' = {
+resource uploadsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2025-01-01' = {
   parent: blobService
   name: storageContainerName
   properties: { publicAccess: 'None' }
@@ -322,7 +369,7 @@ resource aiModelDeployments 'Microsoft.CognitiveServices/accounts/deployments@20
 ]
 
 // ----------------------------------------------------------------- key vault
-resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' = {
+resource keyVault 'Microsoft.KeyVault/vaults@2025-05-01' = {
   name: keyVaultName
   location: location
   tags: resourceTags
@@ -344,32 +391,32 @@ resource keyVault 'Microsoft.KeyVault/vaults@2024-11-01' = {
 // A vaults/secrets PUT always writes a new version, and secure-param defaults
 // re-evaluate newGuid() on every deployment — hence the bootstrapSecrets gate:
 // these resources exist ONLY on first install.
-resource secretKeyBaseSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = if (bootstrapSecrets) {
+resource secretKeyBaseSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'secret-key-base'
   properties: { value: replace(secretKeyBaseSeed, '-', '') }
 }
 
-resource tokenSigningSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = if (bootstrapSecrets) {
+resource tokenSigningSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'token-signing-secret'
   properties: { value: replace(tokenSigningSeed, '-', '') }
 }
 
-resource pgAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = if (bootstrapSecrets) {
+resource pgAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'pg-admin-password'
   // Prefix guarantees the 3-of-4 character classes Azure PG requires.
   properties: { value: 'E1!${replace(pgPasswordSeed, '-', '')}' }
 }
 
-resource mailpaceApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = if (bootstrapSecrets) {
+resource mailpaceApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'mailpace-api-key'
   properties: { value: mailpaceApiKey }
 }
 
-resource registryPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = if (bootstrapSecrets) {
+resource registryPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'registry-password'
   properties: { value: registryPassword }
@@ -377,7 +424,7 @@ resource registryPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' =
 
 // Always present so the container-app module can bind it unconditionally;
 // holds the BYO key, or a placeholder when Azure AI serves the key instead.
-resource llmApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2024-11-01' = if (bootstrapSecrets) {
+resource llmApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'llm-api-key'
   properties: { value: enableAzureAi ? 'unused-azure-ai-enabled' : byoLlmApiKey }
@@ -393,6 +440,8 @@ module postgres 'modules/postgres.bicep' = {
     skuName: pgSkuName
     skuTier: pgSkuTier
     storageSizeGB: pgStorageGB
+    backupRetentionDays: pgBackupRetentionDays
+    geoRedundantBackup: pgGeoRedundantBackup ? 'Enabled' : 'Disabled'
     administratorLoginPassword: keyVault.getSecret('pg-admin-password')
   }
   // getSecret() adds a dependency on the VAULT, not the secret — make the

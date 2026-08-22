@@ -1,0 +1,1 @@
+edspace.azurecr.io/edspace/edspace:v1.0.1

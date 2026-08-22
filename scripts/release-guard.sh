@@ -44,5 +44,17 @@ case "$APP_VERSION" in
     ;;
 esac
 
+# Same rule for the Deploy-to-Azure image pin: it is the default image the
+# committed azuredeploy.json deploys, so a dev or floating pin in a release
+# ships a portal button that installs an unreleased image.
+CONTAINER_IMAGE=$(tr -d '[:space:]' < marketplace/azure/managed-app/container-image.txt)
+case "$CONTAINER_IMAGE" in
+  ""|*:latest|*dev*)
+    echo "Refusing release with unpinned container-image.txt: ${CONTAINER_IMAGE:-<empty>}" >&2
+    exit 1
+    ;;
+esac
+
 echo "version=${CHART_VERSION}"
 echo "appVersion=${APP_VERSION}"
+echo "containerImage=${CONTAINER_IMAGE}"

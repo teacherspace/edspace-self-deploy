@@ -78,6 +78,12 @@ For turnkey Azure customers, EdSpace is available as an **Azure Managed Applicat
 
 Note: the managed application currently runs a single app replica and scales vertically ([docs/limitations.md](docs/limitations.md)).
 
+Prefer to own and operate the deployment yourself? The same stack can be deployed directly — without the marketplace — via the **Deploy to Azure** button:
+
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fteacherspace%2Fedspace-self-deploy%2Fmain%2Fmarketplace%2Fazure%2Fmanaged-app%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fteacherspace%2Fedspace-self-deploy%2Fmain%2Fmarketplace%2Fazure%2Fmanaged-app%2FcreateUiDefinition.json)
+
+It uses the same portal form (registry credentials, MailPace key, AI options), but everything lands in a resource group you control and version updates are self-service (`az containerapp update --image <new tag>`) rather than operated by EdSpace.
+
 ## Configuration
 
 The single source of truth for all settings is [`config/contract.yaml`](config/contract.yaml); every deployment path is generated from it, and the chart validates your values against it at install time (typos and misplaced secrets are rejected).

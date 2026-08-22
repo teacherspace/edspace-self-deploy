@@ -19,6 +19,15 @@ param skuTier string = 'Burstable'
 @maxValue(32767)
 param storageSizeGB int = 32
 
+@minValue(7)
+@maxValue(35)
+param backupRetentionDays int = 7
+
+// Create-time only: Azure rejects toggling geo-redundancy on an existing
+// flexible server, so redeploys must pass the value chosen at first install.
+@allowed(['Enabled', 'Disabled'])
+param geoRedundantBackup string = 'Disabled'
+
 param databaseName string = 'edspace'
 
 // The app's Ecto migrations run CREATE EXTENSION for these; they must be
@@ -30,7 +39,7 @@ var allowedExtensions = 'VECTOR,CITEXT,PG_TRGM'
 // D2ds_v5 859) already clear the app's pool math — POOL_SIZE(30) x
 // POOL_COUNT(2) = 60 per node plus headroom (see docs/database.md).
 
-resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
+resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2025-08-01' = {
   name: serverName
   location: location
   tags: tags
@@ -47,8 +56,8 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
       autoGrow: 'Enabled'
     }
     backup: {
-      backupRetentionDays: 7
-      geoRedundantBackup: 'Disabled'
+      backupRetentionDays: backupRetentionDays
+      geoRedundantBackup: geoRedundantBackup
     }
     highAvailability: {
       mode: 'Disabled' // Burstable tier does not support HA
@@ -60,7 +69,7 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2024-08-01' = {
   }
 }
 
-resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-01' = {
+resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2025-08-01' = {
   parent: server
   name: databaseName
   properties: {
@@ -73,7 +82,7 @@ resource database 'Microsoft.DBforPostgreSQL/flexibleServers/databases@2024-08-0
 // (ACA Consumption has no stable egress IP to pin). TLS is enforced by the
 // server default (require_secure_transport=on); the app connects with
 // ?ssl=true. VNet isolation is the documented v2 hardening path.
-resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2024-08-01' = {
+resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallRules@2025-08-01' = {
   parent: server
   name: 'AllowAllAzureServicesAndResourcesWithinAzureIps'
   properties: {
@@ -83,7 +92,7 @@ resource allowAzureServices 'Microsoft.DBforPostgreSQL/flexibleServers/firewallR
   dependsOn: [database] // flexible server allows one mutating operation at a time
 }
 
-resource extensionsConfig 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2024-08-01' = {
+resource extensionsConfig 'Microsoft.DBforPostgreSQL/flexibleServers/configurations@2025-08-01' = {
   parent: server
   name: 'azure.extensions'
   properties: {
