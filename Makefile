@@ -4,7 +4,7 @@
 CHART := chart/edspace
 CI_VALUES := $(wildcard $(CHART)/ci/*.yaml)
 
-.PHONY: gen check lint test-validation template package bicep compose-config clean
+.PHONY: gen check lint test-validation template package bicep bicep-gen bicep-check compose-config clean
 
 gen:
 	uv run scripts/gen.py
@@ -30,6 +30,12 @@ package: check lint
 
 bicep:
 	cd marketplace/azure/managed-app && ./build.sh
+
+bicep-gen:
+	cd marketplace/azure/managed-app && ./gen-azuredeploy.sh
+
+bicep-check:
+	cd marketplace/azure/managed-app && ./gen-azuredeploy.sh --check
 
 # Mirrors the CI compose job (.env from the example plus the two values the
 # ${VAR:?} guards require), in a scratch dir so a real compose/.env is untouched.

@@ -43,6 +43,13 @@ jobs:
       - name: Verify generated files are current
         run: uv run scripts/gen.py --check
 
+      - name: Verify committed azuredeploy.json is current
+        # The Deploy-to-Azure button serves this file from raw.githubusercontent;
+        # a tag must not ship with it stale relative to the Bicep or image pin.
+        run: |
+          az bicep install
+          bash marketplace/azure/managed-app/gen-azuredeploy.sh --check
+
       - name: Verify the tag is releasable
         run: bash scripts/release-guard.sh "$GITHUB_REF_NAME"
 

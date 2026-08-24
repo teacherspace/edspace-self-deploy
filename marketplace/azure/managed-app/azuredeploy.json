@@ -1,0 +1,1282 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.44.1.10279",
+      "templateHash": "4105260444897359069"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources."
+      }
+    },
+    "tags": {
+      "type": "object",
+      "defaultValue": {},
+      "metadata": {
+        "description": "Extra tags applied to every deployed resource (merged with the publisher marker tag)."
+      }
+    },
+    "appSize": {
+      "type": "string",
+      "defaultValue": "standard",
+      "allowedValues": [
+        "standard",
+        "large"
+      ],
+      "metadata": {
+        "description": "standard = 1 vCPU / 2 GiB, large = 2 vCPU / 4 GiB."
+      }
+    },
+    "containerImage": {
+      "type": "string",
+      "defaultValue": "edspace.azurecr.io/edspace/edspace:v1.0.1",
+      "metadata": {
+        "description": "App image pinned by build.sh for each managed-app definition version; vendor-operated updates move instances forward."
+      }
+    },
+    "pgSkuName": {
+      "type": "string",
+      "defaultValue": "Standard_B2s",
+      "metadata": {
+        "description": "PostgreSQL Flexible Server compute SKU (e.g. Standard_B2s, Standard_D2ds_v5)."
+      }
+    },
+    "pgSkuTier": {
+      "type": "string",
+      "defaultValue": "Burstable",
+      "allowedValues": [
+        "Burstable",
+        "GeneralPurpose",
+        "MemoryOptimized"
+      ],
+      "metadata": {
+        "description": "PostgreSQL compute tier; must match pgSkuName's family."
+      }
+    },
+    "pgStorageGB": {
+      "type": "int",
+      "defaultValue": 32,
+      "minValue": 32,
+      "maxValue": 32767,
+      "metadata": {
+        "description": "PostgreSQL storage in GiB. Auto-grow is enabled; redeploys must pass the server's current size."
+      }
+    },
+    "pgBackupRetentionDays": {
+      "type": "int",
+      "defaultValue": 7,
+      "minValue": 7,
+      "maxValue": 35,
+      "metadata": {
+        "description": "Days PostgreSQL daily backups are retained."
+      }
+    },
+    "pgGeoRedundantBackup": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Replicate PostgreSQL backups to the paired Azure region for cross-region restore (adds backup cost; can only be chosen at first deployment)."
+      }
+    },
+    "storageSku": {
+      "type": "string",
+      "defaultValue": "Standard_LRS",
+      "allowedValues": [
+        "Standard_LRS",
+        "Standard_GRS"
+      ],
+      "metadata": {
+        "description": "Redundancy for the uploads storage account (LRS = single region, GRS = geo-replicated)."
+      }
+    },
+    "enableAzureAi": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Deploy an Azure AI Foundry account with EdSpace model deployments. When false, supply the byoLlm* parameters."
+      }
+    },
+    "aiLocation": {
+      "type": "string",
+      "defaultValue": "swedencentral",
+      "metadata": {
+        "description": "Region for the AI account, decoupled from the app region for model availability."
+      }
+    },
+    "textModelCapacity": {
+      "type": "int",
+      "defaultValue": 800,
+      "metadata": {
+        "description": "TPM capacity (thousands) for each chat/text model. Draws on the CUSTOMER subscription quota in aiLocation; each model has its own quota bucket. Sized to admit one worst-case turn (~780) — lowering it can make very large chats hang."
+      }
+    },
+    "smallModelCapacity": {
+      "type": "int",
+      "defaultValue": 200,
+      "metadata": {
+        "description": "TPM capacity (thousands) for each small/background model (titles, classifiers, reranking)."
+      }
+    },
+    "embeddingModelCapacity": {
+      "type": "int",
+      "defaultValue": 100,
+      "metadata": {
+        "description": "TPM capacity (thousands) for the embedding model."
+      }
+    },
+    "enableSpeech": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Enable voice features via Azure Speech on the AI account (only applies when enableAzureAi is true)."
+      }
+    },
+    "byoLlmBaseUrl": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Base URL of your Azure OpenAI-compatible endpoint. Required when enableAzureAi is false; ignored otherwise."
+      }
+    },
+    "byoLlmApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "API key for the BYO LLM endpoint. Required when enableAzureAi is false."
+      }
+    },
+    "byoLlmTextDeployment": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Deployment name serving chat/text models on the BYO endpoint."
+      }
+    },
+    "byoLlmSmallDeployment": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Deployment name serving small/background models on the BYO endpoint."
+      }
+    },
+    "byoLlmEmbeddingDeployment": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Deployment name serving the embedding model (1536 dimensions) on the BYO endpoint."
+      }
+    },
+    "byoLlmApiVersion": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "API version query parameter for the BYO endpoint. Leave empty for the provider default."
+      }
+    },
+    "customDomain": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Custom public hostname. Leave empty to use the generated *.azurecontainerapps.io address. Custom domains are bound post-install by EdSpace support (see README)."
+      }
+    },
+    "mailpaceApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "MailPace API key. Transactional email is required — invitations and magic-link sign-in depend on it."
+      }
+    },
+    "mailFromEmail": {
+      "type": "string",
+      "metadata": {
+        "description": "From address for all outgoing email (must be a verified MailPace domain)."
+      }
+    },
+    "mailFromName": {
+      "type": "string",
+      "defaultValue": "EdSpace",
+      "metadata": {
+        "description": "Display name for outgoing email."
+      }
+    },
+    "registryServer": {
+      "type": "string",
+      "defaultValue": "edspace.azurecr.io",
+      "metadata": {
+        "description": "Container registry host serving the EdSpace image. Leave at the default unless EdSpace support directs otherwise."
+      }
+    },
+    "registryUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "Per-customer registry username from your EdSpace welcome email."
+      }
+    },
+    "registryPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Per-customer registry password/token from your EdSpace welcome email."
+      }
+    },
+    "bootstrapSecrets": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Persist generated + user-supplied secrets into the instance Key Vault. true on first install ONLY; vendor-operated redeploys MUST pass false."
+      }
+    },
+    "secretKeyBaseSeed": {
+      "type": "securestring",
+      "defaultValue": "[format('{0}{1}', newGuid(), newGuid())]",
+      "metadata": {
+        "description": "Entropy seed for the generated SECRET_KEY_BASE. Leave at the default; only read when bootstrapSecrets is true."
+      }
+    },
+    "tokenSigningSeed": {
+      "type": "securestring",
+      "defaultValue": "[newGuid()]",
+      "metadata": {
+        "description": "Entropy seed for the generated TOKEN_SIGNING_SECRET. Leave at the default; only read when bootstrapSecrets is true."
+      }
+    },
+    "pgPasswordSeed": {
+      "type": "securestring",
+      "defaultValue": "[newGuid()]",
+      "metadata": {
+        "description": "Entropy seed for the generated PostgreSQL admin password. Leave at the default; only read when bootstrapSecrets is true."
+      }
+    }
+  },
+  "variables": {
+    "suffix": "[uniqueString(resourceGroup().id)]",
+    "resourceTags": "[union(parameters('tags'), createObject('edspace.io/product', 'edspace'))]",
+    "logAnalyticsName": "[format('log-edspace-{0}', variables('suffix'))]",
+    "acaEnvName": "[format('cae-edspace-{0}', variables('suffix'))]",
+    "pgServerName": "[format('pg-edspace-{0}', variables('suffix'))]",
+    "storageAccountName": "[format('stedspace{0}', variables('suffix'))]",
+    "keyVaultName": "[format('kv-eds-{0}', variables('suffix'))]",
+    "aiAccountName": "[format('aif-edspace-{0}', variables('suffix'))]",
+    "storageContainerName": "uploads",
+    "modelDeployments": [
+      {
+        "name": "gpt-5.1",
+        "capacity": "[parameters('textModelCapacity')]",
+        "sku": "GlobalStandard",
+        "model": {
+          "format": "OpenAI",
+          "name": "gpt-5.1",
+          "version": "2025-11-13"
+        }
+      },
+      {
+        "name": "gpt-5.4",
+        "capacity": "[parameters('textModelCapacity')]",
+        "sku": "GlobalStandard",
+        "model": {
+          "format": "OpenAI",
+          "name": "gpt-5.4",
+          "version": "2026-03-05"
+        }
+      },
+      {
+        "name": "gpt-5.6-sol",
+        "capacity": "[parameters('textModelCapacity')]",
+        "sku": "GlobalStandard",
+        "model": {
+          "format": "OpenAI",
+          "name": "gpt-5.6-sol",
+          "version": "2026-07-09"
+        }
+      },
+      {
+        "name": "gpt-5.6-terra",
+        "capacity": "[parameters('textModelCapacity')]",
+        "sku": "GlobalStandard",
+        "model": {
+          "format": "OpenAI",
+          "name": "gpt-5.6-terra",
+          "version": "2026-07-09"
+        }
+      },
+      {
+        "name": "gpt-5.6-luna",
+        "capacity": "[parameters('smallModelCapacity')]",
+        "sku": "GlobalStandard",
+        "model": {
+          "format": "OpenAI",
+          "name": "gpt-5.6-luna",
+          "version": "2026-07-09"
+        }
+      },
+      {
+        "name": "gpt-5-mini",
+        "capacity": "[parameters('smallModelCapacity')]",
+        "sku": "GlobalStandard",
+        "model": {
+          "format": "OpenAI",
+          "name": "gpt-5-mini",
+          "version": "2025-08-07"
+        }
+      },
+      {
+        "name": "Mistral-Large-3",
+        "capacity": "[parameters('textModelCapacity')]",
+        "sku": "GlobalStandard",
+        "model": {
+          "format": "Mistral AI",
+          "name": "Mistral-Large-3",
+          "version": "1"
+        }
+      },
+      {
+        "name": "text-embedding-3-small",
+        "capacity": "[parameters('embeddingModelCapacity')]",
+        "sku": "GlobalStandard",
+        "model": {
+          "format": "OpenAI",
+          "name": "text-embedding-3-small",
+          "version": "1"
+        }
+      }
+    ]
+  },
+  "resources": [
+    {
+      "type": "Microsoft.OperationalInsights/workspaces",
+      "apiVersion": "2025-02-01",
+      "name": "[variables('logAnalyticsName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('resourceTags')]",
+      "properties": {
+        "sku": {
+          "name": "PerGB2018"
+        },
+        "retentionInDays": 30
+      }
+    },
+    {
+      "type": "Microsoft.App/managedEnvironments",
+      "apiVersion": "2025-01-01",
+      "name": "[variables('acaEnvName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('resourceTags')]",
+      "properties": {
+        "appLogsConfiguration": {
+          "destination": "log-analytics",
+          "logAnalyticsConfiguration": {
+            "customerId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName')), '2025-02-01').customerId]",
+            "sharedKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName')), '2025-02-01').primarySharedKey]"
+          }
+        },
+        "workloadProfiles": [
+          {
+            "name": "Consumption",
+            "workloadProfileType": "Consumption"
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts",
+      "apiVersion": "2025-01-01",
+      "name": "[variables('storageAccountName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('resourceTags')]",
+      "kind": "StorageV2",
+      "sku": {
+        "name": "[parameters('storageSku')]"
+      },
+      "properties": {
+        "minimumTlsVersion": "TLS1_2",
+        "supportsHttpsTrafficOnly": true,
+        "allowBlobPublicAccess": false,
+        "allowSharedKeyAccess": true,
+        "encryption": {
+          "requireInfrastructureEncryption": true,
+          "keySource": "Microsoft.Storage",
+          "services": {
+            "blob": {
+              "enabled": true
+            },
+            "file": {
+              "enabled": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices",
+      "apiVersion": "2025-01-01",
+      "name": "[format('{0}/{1}', variables('storageAccountName'), 'default')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Storage/storageAccounts/blobServices/containers",
+      "apiVersion": "2025-01-01",
+      "name": "[format('{0}/{1}/{2}', variables('storageAccountName'), 'default', variables('storageContainerName'))]",
+      "properties": {
+        "publicAccess": "None"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices', variables('storageAccountName'), 'default')]"
+      ]
+    },
+    {
+      "condition": "[parameters('enableAzureAi')]",
+      "type": "Microsoft.CognitiveServices/accounts",
+      "apiVersion": "2025-09-01",
+      "name": "[variables('aiAccountName')]",
+      "location": "[parameters('aiLocation')]",
+      "tags": "[variables('resourceTags')]",
+      "kind": "AIServices",
+      "sku": {
+        "name": "S0"
+      },
+      "identity": {
+        "type": "SystemAssigned"
+      },
+      "properties": {
+        "allowProjectManagement": true,
+        "customSubDomainName": "[variables('aiAccountName')]",
+        "publicNetworkAccess": "Enabled"
+      }
+    },
+    {
+      "copy": {
+        "name": "aiModelDeployments",
+        "count": "[length(variables('modelDeployments'))]",
+        "mode": "serial",
+        "batchSize": 1
+      },
+      "condition": "[parameters('enableAzureAi')]",
+      "type": "Microsoft.CognitiveServices/accounts/deployments",
+      "apiVersion": "2025-09-01",
+      "name": "[format('{0}/{1}', variables('aiAccountName'), variables('modelDeployments')[copyIndex()].name)]",
+      "sku": {
+        "name": "[variables('modelDeployments')[copyIndex()].sku]",
+        "capacity": "[variables('modelDeployments')[copyIndex()].capacity]"
+      },
+      "properties": {
+        "model": "[variables('modelDeployments')[copyIndex()].model]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiAccountName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.KeyVault/vaults",
+      "apiVersion": "2025-05-01",
+      "name": "[variables('keyVaultName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('resourceTags')]",
+      "properties": {
+        "sku": {
+          "family": "A",
+          "name": "standard"
+        },
+        "tenantId": "[subscription().tenantId]",
+        "enabledForTemplateDeployment": true,
+        "enableSoftDelete": true,
+        "enablePurgeProtection": true,
+        "softDeleteRetentionInDays": 90,
+        "enableRbacAuthorization": false,
+        "accessPolicies": []
+      }
+    },
+    {
+      "condition": "[parameters('bootstrapSecrets')]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2025-05-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), 'secret-key-base')]",
+      "properties": {
+        "value": "[replace(parameters('secretKeyBaseSeed'), '-', '')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('bootstrapSecrets')]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2025-05-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), 'token-signing-secret')]",
+      "properties": {
+        "value": "[replace(parameters('tokenSigningSeed'), '-', '')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('bootstrapSecrets')]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2025-05-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), 'pg-admin-password')]",
+      "properties": {
+        "value": "[format('E1!{0}', replace(parameters('pgPasswordSeed'), '-', ''))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('bootstrapSecrets')]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2025-05-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), 'mailpace-api-key')]",
+      "properties": {
+        "value": "[parameters('mailpaceApiKey')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('bootstrapSecrets')]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2025-05-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), 'registry-password')]",
+      "properties": {
+        "value": "[parameters('registryPassword')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('bootstrapSecrets')]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2025-05-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), 'llm-api-key')]",
+      "properties": {
+        "value": "[if(parameters('enableAzureAi'), 'unused-azure-ai-enabled', parameters('byoLlmApiKey'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "edspace-postgres",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "serverName": {
+            "value": "[variables('pgServerName')]"
+          },
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('resourceTags')]"
+          },
+          "skuName": {
+            "value": "[parameters('pgSkuName')]"
+          },
+          "skuTier": {
+            "value": "[parameters('pgSkuTier')]"
+          },
+          "storageSizeGB": {
+            "value": "[parameters('pgStorageGB')]"
+          },
+          "backupRetentionDays": {
+            "value": "[parameters('pgBackupRetentionDays')]"
+          },
+          "geoRedundantBackup": "[if(parameters('pgGeoRedundantBackup'), createObject('value', 'Enabled'), createObject('value', 'Disabled'))]",
+          "administratorLoginPassword": {
+            "reference": {
+              "keyVault": {
+                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+              },
+              "secretName": "pg-admin-password"
+            }
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "11532111233199147721"
+            }
+          },
+          "parameters": {
+            "serverName": {
+              "type": "string"
+            },
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            },
+            "administratorLogin": {
+              "type": "string",
+              "defaultValue": "edspace"
+            },
+            "administratorLoginPassword": {
+              "type": "securestring"
+            },
+            "skuName": {
+              "type": "string",
+              "defaultValue": "Standard_B2s"
+            },
+            "skuTier": {
+              "type": "string",
+              "defaultValue": "Burstable"
+            },
+            "storageSizeGB": {
+              "type": "int",
+              "defaultValue": 32,
+              "minValue": 32,
+              "maxValue": 32767
+            },
+            "backupRetentionDays": {
+              "type": "int",
+              "defaultValue": 7,
+              "minValue": 7,
+              "maxValue": 35
+            },
+            "geoRedundantBackup": {
+              "type": "string",
+              "defaultValue": "Disabled",
+              "allowedValues": [
+                "Enabled",
+                "Disabled"
+              ]
+            },
+            "databaseName": {
+              "type": "string",
+              "defaultValue": "edspace"
+            }
+          },
+          "variables": {
+            "allowedExtensions": "VECTOR,CITEXT,PG_TRGM"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+              "apiVersion": "2025-08-01",
+              "name": "[parameters('serverName')]",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "sku": {
+                "name": "[parameters('skuName')]",
+                "tier": "[parameters('skuTier')]"
+              },
+              "properties": {
+                "version": "16",
+                "administratorLogin": "[parameters('administratorLogin')]",
+                "administratorLoginPassword": "[parameters('administratorLoginPassword')]",
+                "storage": {
+                  "storageSizeGB": "[parameters('storageSizeGB')]",
+                  "autoGrow": "Enabled"
+                },
+                "backup": {
+                  "backupRetentionDays": "[parameters('backupRetentionDays')]",
+                  "geoRedundantBackup": "[parameters('geoRedundantBackup')]"
+                },
+                "highAvailability": {
+                  "mode": "Disabled"
+                },
+                "authConfig": {
+                  "activeDirectoryAuth": "Disabled",
+                  "passwordAuth": "Enabled"
+                }
+              }
+            },
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+              "apiVersion": "2025-08-01",
+              "name": "[format('{0}/{1}', parameters('serverName'), parameters('databaseName'))]",
+              "properties": {
+                "charset": "UTF8",
+                "collation": "en_US.utf8"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+              "apiVersion": "2025-08-01",
+              "name": "[format('{0}/{1}', parameters('serverName'), 'AllowAllAzureServicesAndResourcesWithinAzureIps')]",
+              "properties": {
+                "startIpAddress": "0.0.0.0",
+                "endIpAddress": "0.0.0.0"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/databases', parameters('serverName'), parameters('databaseName'))]",
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+              ]
+            },
+            {
+              "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
+              "apiVersion": "2025-08-01",
+              "name": "[format('{0}/{1}', parameters('serverName'), 'azure.extensions')]",
+              "properties": {
+                "value": "[variables('allowedExtensions')]",
+                "source": "user-override"
+              },
+              "dependsOn": [
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers/firewallRules', parameters('serverName'), 'AllowAllAzureServicesAndResourcesWithinAzureIps')]",
+                "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+              ]
+            }
+          ],
+          "outputs": {
+            "fqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName')), '2025-08-01').fullyQualifiedDomainName]"
+            },
+            "adminLogin": {
+              "type": "string",
+              "value": "[parameters('administratorLogin')]"
+            },
+            "databaseName": {
+              "type": "string",
+              "value": "[parameters('databaseName')]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'pg-admin-password')]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deployments",
+      "apiVersion": "2025-04-01",
+      "name": "edspace-app",
+      "properties": {
+        "expressionEvaluationOptions": {
+          "scope": "inner"
+        },
+        "mode": "Incremental",
+        "parameters": {
+          "location": {
+            "value": "[parameters('location')]"
+          },
+          "tags": {
+            "value": "[variables('resourceTags')]"
+          },
+          "environmentId": {
+            "value": "[resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName'))]"
+          },
+          "containerImage": {
+            "value": "[parameters('containerImage')]"
+          },
+          "appSize": {
+            "value": "[parameters('appSize')]"
+          },
+          "phxHost": "[if(empty(parameters('customDomain')), createObject('value', format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain)), createObject('value', parameters('customDomain')))]",
+          "registryServer": {
+            "value": "[parameters('registryServer')]"
+          },
+          "registryUsername": {
+            "value": "[parameters('registryUsername')]"
+          },
+          "registryPassword": {
+            "reference": {
+              "keyVault": {
+                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+              },
+              "secretName": "registry-password"
+            }
+          },
+          "pgAdminLogin": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'edspace-postgres'), '2025-04-01').outputs.adminLogin.value]"
+          },
+          "pgFqdn": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'edspace-postgres'), '2025-04-01').outputs.fqdn.value]"
+          },
+          "pgDatabaseName": {
+            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'edspace-postgres'), '2025-04-01').outputs.databaseName.value]"
+          },
+          "pgAdminPassword": {
+            "reference": {
+              "keyVault": {
+                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+              },
+              "secretName": "pg-admin-password"
+            }
+          },
+          "secretKeyBase": {
+            "reference": {
+              "keyVault": {
+                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+              },
+              "secretName": "secret-key-base"
+            }
+          },
+          "tokenSigningSecret": {
+            "reference": {
+              "keyVault": {
+                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+              },
+              "secretName": "token-signing-secret"
+            }
+          },
+          "mailpaceApiKey": {
+            "reference": {
+              "keyVault": {
+                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+              },
+              "secretName": "mailpace-api-key"
+            }
+          },
+          "llmApiKeyFromKv": {
+            "reference": {
+              "keyVault": {
+                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+              },
+              "secretName": "llm-api-key"
+            }
+          },
+          "llmApiKeyFromAi": "[if(parameters('enableAzureAi'), createObject('value', listKeys(resourceId('Microsoft.CognitiveServices/accounts', variables('aiAccountName')), '2025-09-01').key1), createObject('value', ''))]",
+          "useAiAccountKey": {
+            "value": "[parameters('enableAzureAi')]"
+          },
+          "speechKey": "[if(and(parameters('enableAzureAi'), parameters('enableSpeech')), createObject('value', listKeys(resourceId('Microsoft.CognitiveServices/accounts', variables('aiAccountName')), '2025-09-01').key1), createObject('value', ''))]",
+          "storageAccountName": {
+            "value": "[variables('storageAccountName')]"
+          },
+          "storageContainerName": {
+            "value": "[variables('storageContainerName')]"
+          },
+          "storageAccountKey": {
+            "value": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2025-01-01').keys[0].value]"
+          },
+          "llmBaseUrl": "[if(parameters('enableAzureAi'), createObject('value', reference(resourceId('Microsoft.CognitiveServices/accounts', variables('aiAccountName')), '2025-09-01').endpoint), createObject('value', parameters('byoLlmBaseUrl')))]",
+          "llmTextModel": "[if(parameters('enableAzureAi'), createObject('value', 'azure:gpt-5.6-sol'), createObject('value', ''))]",
+          "llmTextDeployment": "[if(parameters('enableAzureAi'), createObject('value', 'gpt-5.6-sol'), createObject('value', parameters('byoLlmTextDeployment')))]",
+          "llmSmallModel": "[if(parameters('enableAzureAi'), createObject('value', 'azure:gpt-5.6-luna'), createObject('value', ''))]",
+          "llmSmallDeployment": "[if(parameters('enableAzureAi'), createObject('value', 'gpt-5.6-luna'), createObject('value', parameters('byoLlmSmallDeployment')))]",
+          "llmEmbeddingModel": "[if(parameters('enableAzureAi'), createObject('value', 'azure:text-embedding-3-small'), createObject('value', ''))]",
+          "llmEmbeddingDeployment": "[if(parameters('enableAzureAi'), createObject('value', 'text-embedding-3-small'), createObject('value', parameters('byoLlmEmbeddingDeployment')))]",
+          "llmApiVersion": {
+            "value": "[parameters('byoLlmApiVersion')]"
+          },
+          "speechEnabled": {
+            "value": "[and(parameters('enableAzureAi'), parameters('enableSpeech'))]"
+          },
+          "speechRegion": "[if(and(parameters('enableAzureAi'), parameters('enableSpeech')), createObject('value', parameters('aiLocation')), createObject('value', ''))]",
+          "mailFromEmail": {
+            "value": "[parameters('mailFromEmail')]"
+          },
+          "mailFromName": {
+            "value": "[parameters('mailFromName')]"
+          }
+        },
+        "template": {
+          "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+          "contentVersion": "1.0.0.0",
+          "metadata": {
+            "_generator": {
+              "name": "bicep",
+              "version": "0.44.1.10279",
+              "templateHash": "12942436070289758759"
+            }
+          },
+          "parameters": {
+            "location": {
+              "type": "string"
+            },
+            "tags": {
+              "type": "object",
+              "defaultValue": {}
+            },
+            "environmentId": {
+              "type": "string"
+            },
+            "containerImage": {
+              "type": "string"
+            },
+            "appSize": {
+              "type": "string",
+              "defaultValue": "standard",
+              "allowedValues": [
+                "standard",
+                "large"
+              ],
+              "metadata": {
+                "description": "ACA enforces 1:2 vCPU:GiB pairs on Consumption; expose fixed sizes rather than free-form cpu/mem."
+              }
+            },
+            "phxHost": {
+              "type": "string"
+            },
+            "registryServer": {
+              "type": "string"
+            },
+            "registryUsername": {
+              "type": "string"
+            },
+            "registryPassword": {
+              "type": "securestring"
+            },
+            "pgAdminLogin": {
+              "type": "string"
+            },
+            "pgFqdn": {
+              "type": "string"
+            },
+            "pgDatabaseName": {
+              "type": "string"
+            },
+            "pgAdminPassword": {
+              "type": "securestring"
+            },
+            "secretKeyBase": {
+              "type": "securestring"
+            },
+            "tokenSigningSecret": {
+              "type": "securestring"
+            },
+            "mailpaceApiKey": {
+              "type": "securestring"
+            },
+            "llmApiKeyFromKv": {
+              "type": "securestring"
+            },
+            "llmApiKeyFromAi": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "useAiAccountKey": {
+              "type": "bool"
+            },
+            "speechKey": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "storageAccountName": {
+              "type": "string"
+            },
+            "storageContainerName": {
+              "type": "string"
+            },
+            "storageAccountKey": {
+              "type": "securestring"
+            },
+            "llmBaseUrl": {
+              "type": "string"
+            },
+            "llmTextDeployment": {
+              "type": "string"
+            },
+            "llmSmallDeployment": {
+              "type": "string"
+            },
+            "llmEmbeddingDeployment": {
+              "type": "string"
+            },
+            "llmTextModel": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "llmSmallModel": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "llmEmbeddingModel": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "llmApiVersion": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "speechEnabled": {
+              "type": "bool"
+            },
+            "speechRegion": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "mailFromEmail": {
+              "type": "string"
+            },
+            "mailFromName": {
+              "type": "string",
+              "defaultValue": "EdSpace"
+            }
+          },
+          "variables": {
+            "sizes": {
+              "standard": {
+                "cpu": "1.0",
+                "memory": "2Gi"
+              },
+              "large": {
+                "cpu": "2.0",
+                "memory": "4Gi"
+              }
+            },
+            "llmApiKey": "[if(parameters('useAiAccountKey'), parameters('llmApiKeyFromAi'), parameters('llmApiKeyFromKv'))]",
+            "databaseUrl": "[format('ecto://{0}:{1}@{2}:5432/{3}?ssl=true', parameters('pgAdminLogin'), uriComponent(parameters('pgAdminPassword')), parameters('pgFqdn'), parameters('pgDatabaseName'))]",
+            "baseSecrets": [
+              {
+                "name": "secret-key-base",
+                "value": "[parameters('secretKeyBase')]"
+              },
+              {
+                "name": "token-signing-secret",
+                "value": "[parameters('tokenSigningSecret')]"
+              },
+              {
+                "name": "database-url",
+                "value": "[variables('databaseUrl')]"
+              },
+              {
+                "name": "azure-storage-key",
+                "value": "[parameters('storageAccountKey')]"
+              },
+              {
+                "name": "llm-api-key",
+                "value": "[variables('llmApiKey')]"
+              },
+              {
+                "name": "mailpace-api-key",
+                "value": "[parameters('mailpaceApiKey')]"
+              },
+              {
+                "name": "registry-password",
+                "value": "[parameters('registryPassword')]"
+              }
+            ],
+            "secrets": "[concat(variables('baseSecrets'), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'azure-speech-key', 'value', parameters('speechKey')))))]",
+            "plainEnv": [
+              {
+                "name": "PHX_HOST",
+                "value": "[parameters('phxHost')]"
+              },
+              {
+                "name": "PHX_CHECK_ORIGIN",
+                "value": "[format('https://{0}', parameters('phxHost'))]"
+              },
+              {
+                "name": "EDSPACE_FILE_STORAGE_ADAPTER",
+                "value": "azure_blob"
+              },
+              {
+                "name": "AZURE_STORAGE_ACCOUNT",
+                "value": "[parameters('storageAccountName')]"
+              },
+              {
+                "name": "AZURE_STORAGE_CONTAINER",
+                "value": "[parameters('storageContainerName')]"
+              },
+              {
+                "name": "EDSPACE_LLM_PROVIDER",
+                "value": "azure"
+              },
+              {
+                "name": "EDSPACE_LLM_BASE_URL",
+                "value": "[parameters('llmBaseUrl')]"
+              },
+              {
+                "name": "EDSPACE_LLM_TEXT_DEPLOYMENT",
+                "value": "[parameters('llmTextDeployment')]"
+              },
+              {
+                "name": "EDSPACE_LLM_SMALL_DEPLOYMENT",
+                "value": "[parameters('llmSmallDeployment')]"
+              },
+              {
+                "name": "EDSPACE_LLM_EMBEDDING_DEPLOYMENT",
+                "value": "[parameters('llmEmbeddingDeployment')]"
+              },
+              {
+                "name": "EDSPACE_SPEECH_ENABLED",
+                "value": "[if(parameters('speechEnabled'), 'true', 'false')]"
+              },
+              {
+                "name": "MAILER_FROM_EMAIL",
+                "value": "[parameters('mailFromEmail')]"
+              },
+              {
+                "name": "CHROMIC_PDF_POOL_SIZE",
+                "value": "2"
+              }
+            ],
+            "secretEnv": [
+              {
+                "name": "SECRET_KEY_BASE",
+                "secretRef": "secret-key-base"
+              },
+              {
+                "name": "TOKEN_SIGNING_SECRET",
+                "secretRef": "token-signing-secret"
+              },
+              {
+                "name": "DATABASE_URL",
+                "secretRef": "database-url"
+              },
+              {
+                "name": "AZURE_STORAGE_KEY",
+                "secretRef": "azure-storage-key"
+              },
+              {
+                "name": "EDSPACE_LLM_API_KEY",
+                "secretRef": "llm-api-key"
+              },
+              {
+                "name": "MAILPACE_API_KEY",
+                "secretRef": "mailpace-api-key"
+              }
+            ],
+            "conditionalEnv": "[concat(if(empty(parameters('llmApiVersion')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_API_VERSION', 'value', parameters('llmApiVersion')))), if(empty(parameters('llmTextModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_TEXT_MODEL', 'value', parameters('llmTextModel')))), if(empty(parameters('llmSmallModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_SMALL_MODEL', 'value', parameters('llmSmallModel')))), if(empty(parameters('llmEmbeddingModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_EMBEDDING_MODEL', 'value', parameters('llmEmbeddingModel')))), if(empty(parameters('speechRegion')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_REGION', 'value', parameters('speechRegion')))), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_KEY', 'secretRef', 'azure-speech-key'))), if(empty(parameters('mailFromName')), createArray(), createArray(createObject('name', 'MAILER_FROM_NAME', 'value', parameters('mailFromName')))))]"
+          },
+          "resources": [
+            {
+              "type": "Microsoft.App/containerApps",
+              "apiVersion": "2025-01-01",
+              "name": "edspace",
+              "location": "[parameters('location')]",
+              "tags": "[parameters('tags')]",
+              "properties": {
+                "environmentId": "[parameters('environmentId')]",
+                "workloadProfileName": "Consumption",
+                "configuration": {
+                  "activeRevisionsMode": "Single",
+                  "ingress": {
+                    "external": true,
+                    "targetPort": 4000,
+                    "transport": "auto",
+                    "allowInsecure": false
+                  },
+                  "registries": [
+                    {
+                      "server": "[parameters('registryServer')]",
+                      "username": "[parameters('registryUsername')]",
+                      "passwordSecretRef": "registry-password"
+                    }
+                  ],
+                  "secrets": "[variables('secrets')]"
+                },
+                "template": {
+                  "containers": [
+                    {
+                      "name": "edspace",
+                      "image": "[parameters('containerImage')]",
+                      "resources": {
+                        "cpu": "[json(variables('sizes')[parameters('appSize')].cpu)]",
+                        "memory": "[variables('sizes')[parameters('appSize')].memory]"
+                      },
+                      "env": "[concat(variables('plainEnv'), variables('secretEnv'), variables('conditionalEnv'))]",
+                      "probes": [
+                        {
+                          "type": "Startup",
+                          "httpGet": {
+                            "path": "/health",
+                            "port": 4000
+                          },
+                          "periodSeconds": 5,
+                          "failureThreshold": 60,
+                          "timeoutSeconds": 3
+                        },
+                        {
+                          "type": "Readiness",
+                          "httpGet": {
+                            "path": "/health",
+                            "port": 4000
+                          },
+                          "periodSeconds": 30,
+                          "failureThreshold": 3,
+                          "timeoutSeconds": 5
+                        },
+                        {
+                          "type": "Liveness",
+                          "tcpSocket": {
+                            "port": 4000
+                          },
+                          "periodSeconds": 15,
+                          "failureThreshold": 3
+                        }
+                      ]
+                    }
+                  ],
+                  "scale": {
+                    "minReplicas": 1,
+                    "maxReplicas": 1
+                  }
+                }
+              }
+            }
+          ],
+          "outputs": {
+            "fqdn": {
+              "type": "string",
+              "value": "[reference(resourceId('Microsoft.App/containerApps', 'edspace'), '2025-01-01').configuration.ingress.fqdn]"
+            }
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName'))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiAccountName'))]",
+        "aiModelDeployments",
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'llm-api-key')]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'mailpace-api-key')]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'pg-admin-password')]",
+        "[resourceId('Microsoft.Resources/deployments', 'edspace-postgres')]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'registry-password')]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'secret-key-base')]",
+        "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'token-signing-secret')]",
+        "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('storageContainerName'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "appUrl": {
+      "type": "string",
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.Resources/deployments', 'edspace-app'), '2025-04-01').outputs.fqdn.value)]"
+    },
+    "appFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'edspace-app'), '2025-04-01').outputs.fqdn.value]"
+    },
+    "postgresFqdn": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deployments', 'edspace-postgres'), '2025-04-01').outputs.fqdn.value]"
+    },
+    "storageAccountName": {
+      "type": "string",
+      "value": "[variables('storageAccountName')]"
+    },
+    "keyVaultName": {
+      "type": "string",
+      "value": "[variables('keyVaultName')]"
+    },
+    "aiAccountName": {
+      "type": "string",
+      "value": "[if(parameters('enableAzureAi'), variables('aiAccountName'), '')]"
+    }
+  }
+}

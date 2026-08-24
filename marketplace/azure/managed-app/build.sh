@@ -12,7 +12,9 @@ cd "$(dirname "$0")"
 NO_ZIP=0
 [ "${1:-}" = "--no-zip" ] && NO_ZIP=1
 
-EDSPACE_CONTAINER_IMAGE=${EDSPACE_CONTAINER_IMAGE:?set a version-pinned EdSpace container image}
+# container-image.txt is the committed default; the env var stays as an
+# override so pipelines can build against a candidate image before pinning it.
+EDSPACE_CONTAINER_IMAGE=${EDSPACE_CONTAINER_IMAGE:-$(tr -d '[:space:]' < container-image.txt)}
 case "$EDSPACE_CONTAINER_IMAGE" in
   *:latest|*__EDSPACE_CONTAINER_IMAGE__*)
     echo "EDSPACE_CONTAINER_IMAGE must use an immutable release tag or digest" >&2
@@ -58,7 +60,7 @@ fi
 cat <<'EOF'
 
 Package built. Before submitting to Partner Center, also run:
-  * ARM-TTK:      Test-AzTemplate -TemplatePath ./dist   (PowerShell; marketplace certification runs these)
+  * ARM-TTK:      Test-AzTemplate -TemplatePath ./dist   (also enforced in CI on every change)
   * UI sandbox:   https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade
   * Service Catalog end-to-end: test/service-catalog-deploy.sh
 EOF

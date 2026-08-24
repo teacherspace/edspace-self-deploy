@@ -30,4 +30,8 @@ LLM tracing integrates with a Langfuse instance you operate; the chart only expo
 
 ## Horizontal scaling on Azure Container Apps (managed application)
 
-The marketplace managed application pins one replica and scales vertically; BEAM clustering across ACA replicas is not yet supported there. The Helm chart clusters fine on Kubernetes.
+The marketplace managed application pins one replica and scales vertically; BEAM clustering across ACA replicas is not yet supported there. The Helm chart clusters fine on Kubernetes. (Applies equally to the Deploy-to-Azure button, which deploys the same template.)
+
+## Azure template redeploys and Key Vault purge protection
+
+The Azure template (managed application and Deploy-to-Azure button alike) creates an instance Key Vault named `kv-eds-<hash of the resource group id>` with purge protection enabled. If you delete a deployment and redeploy into a resource group with the **same name**, the new vault collides with the soft-deleted one for the retention period. Redeploy into a freshly named resource group instead. Relatedly, the portal form pins `bootstrapSecrets=true`, which is correct for fresh installs only — infra changes to an existing instance must run `az deployment group create` with `bootstrapSecrets=false` (see `marketplace/azure/managed-app/README.md`).

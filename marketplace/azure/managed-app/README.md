@@ -7,18 +7,57 @@ resource group inside the customer's subscription: Container Apps environment
 publisher) retains operator access and rolls updates from its internal release
 tooling.
 
+[![Deploy to Azure](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fteacherspace%2Fedspace-self-deploy%2Fmain%2Fmarketplace%2Fazure%2Fmanaged-app%2Fazuredeploy.json/createUIDefinitionUri/https%3A%2F%2Fraw.githubusercontent.com%2Fteacherspace%2Fedspace-self-deploy%2Fmain%2Fmarketplace%2Fazure%2Fmanaged-app%2FcreateUiDefinition.json)
+
+The button deploys the committed [`azuredeploy.json`](azuredeploy.json)
+directly into a customer-owned resource group (self-managed — no managed-app
+wrapper, no publisher access, customer runs their own updates). See the
+root README's "Quickstart (Azure — one-click)".
+
+## Deploy from the CLI (self-managed)
+
+The same template deploys without the portal.
+[`azuredeploy.parameters.json`](azuredeploy.parameters.json) is a starting
+point — copy it, fill in the `REPLACE-…` values (registry credentials,
+MailPace key, from-address), and never commit the filled-in copy anywhere:
+
+```sh
+az group create -n rg-edspace -l westeurope
+az deployment group create -g rg-edspace \
+  -f azuredeploy.json -p @my.parameters.json
+```
+
+Fresh installs use the default `bootstrapSecrets=true`. Infra changes to an
+**existing** instance must add `-p bootstrapSecrets=false` — see the secret
+model below; forgetting it rotates every generated secret.
+
 ## Build
 
 ```sh
-export EDSPACE_CONTAINER_IMAGE=edspace.azurecr.io/edspace/edspace:v1.2.3
 ./build.sh            # dist/mainTemplate.json + createUiDefinition + view + zip
 ./build.sh --no-zip   # compile/package check without the zip
 ```
 
-The build requires a version-pinned image and refuses mutable `latest` or
-untagged image references. Customers are never asked for the image value.
+The image baked into the template defaults to the pin in
+[`container-image.txt`](container-image.txt); export
+`EDSPACE_CONTAINER_IMAGE` to override it for a one-off build. Either way the
+build refuses mutable `latest` or untagged references. Customers are never
+asked for the image value.
 
-Also run before submission: ARM-TTK (`Test-AzTemplate -TemplatePath ./dist`),
+Committed artifact: `azuredeploy.json` is the compiled, image-patched copy of
+`mainTemplate.bicep` that the Deploy-to-Azure button serves from
+raw.githubusercontent.com. Regenerate it with `make bicep-gen` after changing
+the Bicep or `container-image.txt`; CI (`make bicep-check`) and the release
+workflow enforce freshness, and `scripts/release-guard.sh` refuses tags with a
+dev/floating pin.
+
+ARM-TTK (the test suite marketplace certification runs) is enforced in CI on
+every change, against both the built template and `createUiDefinition.json` —
+one test is skipped there ("URIs Should Be Properly Constructed", a false
+positive on the composed `appUrl`/`DATABASE_URL` values). Run it locally with
+`Test-AzTemplate -TemplatePath ./dist`.
+
+Also run before submission:
 the [createUiDefinition sandbox](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade),
 and the Service Catalog end-to-end test (`test/service-catalog-deploy.sh`). The
 test requires `PUBLISHER_GROUP_OBJECT_ID` for the publisher-tenant group that
