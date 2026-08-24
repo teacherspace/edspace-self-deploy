@@ -122,6 +122,20 @@ excluded:
     reason: Member-purge safeguard, managed on the Platform settings page.
   - name: MEMBER_PURGE_ABANDON_AFTER_MINUTES
     reason: Member-purge safeguard, managed on the Platform settings page.
+  - name: EDSPACE_SPEECH_VOICE
+    reason: >-
+      Read-aloud voice, a product preference managed on the Platform
+      settings page.
+  - name: EDSPACE_SPEECH_RECOGNITION_LANGUAGE
+    reason: Dictation language, managed on the Platform settings page.
+  - name: EDSPACE_SPEECH_RECOGNITION_LANGUAGES
+    reason: Dictation language menu, managed on the Platform settings page.
+  - name: DEBUG_AUTH_FAILURES
+    reason: >-
+      Sign-in diagnostics logging leaks personal data, so the supported way
+      to turn it on is the time-boxed window on the Platform settings page,
+      which switches itself off. The env var remains as a boot-time default
+      for EdSpace-operated staging, where it is set and unset by hand.
 
 vars:
   # ---------------------------------------------------------------- phoenix
@@ -620,14 +634,20 @@ vars:
   - name: EDSPACE_SPEECH_ENABLED
     category: speech
     description: >-
-      Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings
-      when enabled; set to "false" when no Azure Speech resource is available.
+      Deployment default for the speech features (STT/TTS). Requires the
+      AZURE_SPEECH_* settings when enabled; the packaging sets it to "false"
+      until an Azure Speech resource is provided.
     type: boolean
     default: { app: true, chart: false, compose: false }
     required: false
     secret: false
     tier: core
     source: user
+    notes: >-
+      A platform admin can switch speech on or off at runtime on the
+      backoffice Platform settings page, which overrides this variable; the
+      page also says when the credentials are missing. The voice and
+      dictation languages are managed there only (see `excluded:`).
 
   - name: AZURE_SPEECH_KEY
     category: speech
@@ -652,36 +672,6 @@ vars:
     category: speech
     description: Azure Speech endpoint override.
     type: string
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_SPEECH_RECOGNITION_LANGUAGE
-    category: speech
-    description: Primary speech-to-text language.
-    type: string
-    default: { app: da-DK }
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_SPEECH_RECOGNITION_LANGUAGES
-    category: speech
-    description: Comma-separated set of languages offered for speech-to-text.
-    type: string
-    default: { app: "da-DK,en-US,de-DE,fr-FR,es-ES,it-IT" }
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_SPEECH_VOICE
-    category: speech
-    description: Default text-to-speech voice.
-    type: string
-    default: { app: da-DK-ChristelNeural }
     required: false
     secret: false
     tier: advanced
@@ -729,13 +719,17 @@ vars:
 
   - name: MAILER_FROM_NAME
     category: mailer
-    description: From display name for transactional email.
+    description: >-
+      Deployment default for the From display name on transactional email.
     type: string
     default: { app: EdSpace }
     required: false
     secret: false
     tier: advanced
     source: user
+    notes: >-
+      Also editable at runtime on the backoffice Platform settings page,
+      which overrides this variable.
 
   - name: MAILPACE_API_KEY
     category: mailer
@@ -1039,18 +1033,6 @@ vars:
     category: auth
     description: Praxis product URL used in license redirects.
     type: string
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: DEBUG_AUTH_FAILURES
-    category: auth
-    description: >-
-      Set to "true" to log detailed SSO failure reasons. WARNING - logs may
-      then contain personal data; enable only while troubleshooting.
-    type: boolean
-    default: { app: false }
     required: false
     secret: false
     tier: advanced

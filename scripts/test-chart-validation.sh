@@ -84,7 +84,7 @@ expect_fail "duplicate structured env key" "${VALID[@]}" --set-string env.PHX_HO
 expect_fail "same key in env and envSecret" "${VALID[@]}" \
   --set-string env.LANGFUSE_ENVIRONMENT=production \
   --set-string envSecret.LANGFUSE_ENVIRONMENT=production
-expect_fail "invalid boolean env value" "${VALID[@]}" --set-string env.DEBUG_AUTH_FAILURES=banana
+expect_fail "invalid boolean env value" "${VALID[@]}" --set-string env.EDSPACE_SPEECH_ENABLED=banana
 expect_fail "Blob storage without a key source" "${VALID[@]}" \
   --set storage.adapter=azure_blob \
   --set-string storage.azureBlob.account=stedspace \

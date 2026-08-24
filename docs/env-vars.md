@@ -59,13 +59,10 @@ Variables marked *managed* are composed by the deployment packaging
 
 | Variable | Required | Default | Secret | Description |
 |---|---|---|---|---|
-| `EDSPACE_SPEECH_ENABLED` | no | true |  | Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; set to "false" when no Azure Speech resource is available. |
+| `EDSPACE_SPEECH_ENABLED` | no | true |  | Deployment default for the speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; the packaging sets it to "false" until an Azure Speech resource is provided. A platform admin can switch speech on or off at runtime on the backoffice Platform settings page, which overrides this variable; the page also says when the credentials are missing. The voice and dictation languages are managed there only (see `excluded:`). |
 | `AZURE_SPEECH_KEY` | no |  | yes | Azure Cognitive Services Speech API key. |
 | `AZURE_SPEECH_REGION` | no |  |  | Azure Speech resource region. |
 | `AZURE_SPEECH_ENDPOINT` | no |  |  | Azure Speech endpoint override. |
-| `EDSPACE_SPEECH_RECOGNITION_LANGUAGE` | no | da-DK |  | Primary speech-to-text language. |
-| `EDSPACE_SPEECH_RECOGNITION_LANGUAGES` | no | da-DK,en-US,de-DE,fr-FR,es-ES,it-IT |  | Comma-separated set of languages offered for speech-to-text. |
-| `EDSPACE_SPEECH_VOICE` | no | da-DK-ChristelNeural |  | Default text-to-speech voice. |
 
 ## Mailer
 
@@ -73,7 +70,7 @@ Variables marked *managed* are composed by the deployment packaging
 |---|---|---|---|---|
 | `MAILER_ADAPTER` | no | mailpace |  | Transactional-email backend. "mailpace" uses the MailPace HTTP API, "smtp" any SMTP relay, "none" disables email entirely — sign-in then uses passwords and/or SSO, and invitation links are shown to the inviting admin to pass on by hand. The app also accepts "local" (Swoosh's in-memory /dev/mailbox), which is refused in production and therefore not offered here. One of: `mailpace`, `smtp`, `none`. |
 | `MAILER_FROM_EMAIL` | conditional |  |  | From address for transactional email. Must be a sender address verified with the provider — MailPace rejects every message otherwise, and most relays refuse the envelope. **Required when** MAILER_ADAPTER is "mailpace" or "smtp" (blank counts as missing and fails at boot); not read with "none". |
-| `MAILER_FROM_NAME` | no | EdSpace |  | From display name for transactional email. |
+| `MAILER_FROM_NAME` | no | EdSpace |  | Deployment default for the From display name on transactional email. Also editable at runtime on the backoffice Platform settings page, which overrides this variable. |
 | `MAILPACE_API_KEY` | conditional |  | yes | MailPace API token. **Required when** MAILER_ADAPTER=mailpace (the default). |
 | `MAILER_SMTP_RELAY` | conditional |  |  | SMTP relay hostname. Configured explicitly, so no MX lookup is done on it. **Required when** MAILER_ADAPTER=smtp. |
 | `MAILER_SMTP_PORT` | no | 587 |  | SMTP relay port. 587 is the STARTTLS submission port; use 465 together with MAILER_SMTP_SSL=true for implicit TLS. |
@@ -107,7 +104,6 @@ Variables marked *managed* are composed by the deployment packaging
 | `PRAXIS_LICENSE_SERVICE_URL` | no |  |  | Praxis license service endpoint. |
 | `PRAXIS_LICENSE_API_KEY` | no |  | yes | Praxis license service API key. |
 | `PRAXIS_PRODUCT_URL` | no |  |  | Praxis product URL used in license redirects. |
-| `DEBUG_AUTH_FAILURES` | no | false |  | Set to "true" to log detailed SSO failure reasons. WARNING - logs may then contain personal data; enable only while troubleshooting. |
 | `EDSPACE_PLATFORM_ADMINS` | conditional |  |  | Comma-separated emails granted platform-admin on reconciliation. This is the first-admin bootstrap: a fresh install has no account that can reach the backoffice, so set this and then run `bin/edspace rpc 'Edspace.Accounts.AdminReconcilerWorker.enqueue()'` inside the app container. Additive only — it never demotes an existing admin. Read at job-perform time on the serving node. **Required when** bootstrapping the first platform admin on a fresh install. |
 
 ## Member retention & purge

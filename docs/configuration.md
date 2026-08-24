@@ -26,6 +26,9 @@ Not everything is deployment configuration. Product-behavior settings live on th
 - **Assistant chat tools** — the master switch and per-tool kill switches (whiteboard drawing/editing, conversation export, assistant handover, share-code recognition, guidance, workspace awareness, builder tools).
 - **Fair use** — the monthly LLM token allowance per user.
 - **Member retention & purge** — the safeguards on the nightly purge sweep (global cap, roster-freshness window, notice floor, stale-run reclaim).
+- **Speech** — the on/off switch, the Danish read-aloud voice and the dictation language(s). The Azure Speech key and region stay in the deployment; the page says when they are missing.
+- **Email sender name** — the display name on transactional email.
+- **Sign-in diagnostics** — a time-boxed window of detailed authentication-failure logging (it leaks personal data, so it switches itself off at the deadline rather than waiting for someone to remember).
 
 Each setting's precedence is *Platform settings page > deployment env var > compiled default*, and the page shows the currently effective value with its provenance. One deliberate exception: the member-purge sweep runs only when **neither** `MEMBER_PURGE_ENABLED` (env, still contracted as break-glass) **nor** the page's toggle disables it — a kill switch on an irreversible deletion works from wherever it was thrown.
 
@@ -62,9 +65,12 @@ The underlying env vars for these settings exist in the app but are outside the 
 
 The application default is on, but the Helm and Compose self-deploy packaging
 defaults speech off until separate Azure Speech credentials are provided. To
-enable it, set `env.EDSPACE_SPEECH_ENABLED: "true"`,
-`envSecret.AZURE_SPEECH_KEY`, and `env.AZURE_SPEECH_REGION` (or supply those
-last two through `extraEnv`/`extraEnvFrom`).
+enable it, set `envSecret.AZURE_SPEECH_KEY` and `env.AZURE_SPEECH_REGION` (or
+supply them through `extraEnv`/`extraEnvFrom`), then either set
+`env.EDSPACE_SPEECH_ENABLED: "true"` or switch speech on from the backoffice
+Platform settings page — the page overrides the variable and tells you if the
+credentials are missing. The read-aloud voice and dictation languages are
+managed on that page, not by env vars.
 
 ## Transactional email
 
@@ -86,6 +92,8 @@ bin/edspace eval "Edspace.Mailer.summary() |> IO.inspect()"
 ## SSO / OIDC
 
 UniLogin, Microsoft Entra ID and Praxis are all optional and configured via passthrough vars (`UNILOGIN_*`, `MICROSOFT_*`, `PRAXIS_*`). Redirect URIs are `https://<app.host>/auth/<provider>/callback`.
+
+**Microsoft Entra ID.** Create an app registration (Web platform, redirect URI `https://<app.host>/auth/microsoft/callback`, a client secret, the optional `email` token claim, and `openid profile email` delegated permissions), then set `MICROSOFT_TENANT_ID` (your Directory (tenant) ID — the app default `common` also admits personal Microsoft accounts, so set it explicitly), `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` (secret) and `MICROSOFT_REDIRECT_URI`. An empty client id disables the provider. On the Azure Deploy-button path these come from the form's *Sign-in* step and the redirect URI is composed for you — see the [managed-app README](../marketplace/azure/managed-app/README.md). To see why a sign-in was rejected, open a time-boxed **Sign-in diagnostics** window on the backoffice Platform settings page; it logs the IdP's claims and errors (personal data — hence the deadline) and switches itself off.
 
 **First admin.** A fresh install has no account that can reach the backoffice. Set `env.EDSPACE_PLATFORM_ADMINS` to a comma-separated list of admin emails, then run `bin/edspace rpc 'Edspace.Accounts.AdminReconcilerWorker.enqueue()'` in the app container. It is additive — it never demotes an existing admin. With `mailer.adapter: none` those admins sign in with a password rather than a magic link.
 

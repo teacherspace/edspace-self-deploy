@@ -171,7 +171,7 @@ EdSpace sends exactly three emails, all about getting into an account: magic-lin
 |---|---|---|---|
 | `MAILER_ADAPTER` | `mailpace`, `smtp`, or `none` | `mailpace` | no |
 | `MAILER_FROM_EMAIL` | From address, verified with your provider | — | unless `none` |
-| `MAILER_FROM_NAME` | From display name | `EdSpace` | no |
+| `MAILER_FROM_NAME` | From display name (deployment default; also editable on the Platform settings page) | `EdSpace` | no |
 | `MAILPACE_API_KEY` | MailPace API token (**secret**) | — | with `mailpace` |
 | `MAILER_SMTP_RELAY` | SMTP relay hostname | — | with `smtp` |
 | `MAILER_SMTP_PORT` | Relay port; use `465` with `MAILER_SMTP_SSL=true` | `587` | no |
@@ -211,14 +211,11 @@ Tracing activates only when all three of `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET
 
 | Name | Description | Default | Required |
 |---|---|---|---|
-| `EDSPACE_SPEECH_ENABLED` | Enable STT/TTS (self-deploy packaging defaults this **off**) | `false`* | no |
+| `EDSPACE_SPEECH_ENABLED` | Deployment default for STT/TTS (self-deploy packaging defaults this **off**) | `false`* | no |
 | `AZURE_SPEECH_KEY` | Azure Speech API key (**secret**) | — | when enabled |
 | `AZURE_SPEECH_REGION` | Azure Speech resource region | — | when enabled |
-| `EDSPACE_SPEECH_RECOGNITION_LANGUAGE` | Primary speech-to-text language | `da-DK` | no |
-| `EDSPACE_SPEECH_RECOGNITION_LANGUAGES` | Languages offered for speech-to-text | `da-DK,en-US,de-DE,fr-FR,es-ES,it-IT` | no |
-| `EDSPACE_SPEECH_VOICE` | Default text-to-speech voice | `da-DK-ChristelNeural` | no |
 
-\* Application default is `true`; the chart and compose packaging set it to `false` until Speech credentials are provided.
+\* Application default is `true`; the chart and compose packaging set it to `false` until Speech credentials are provided. A platform admin can switch speech on or off on the Platform settings page, which overrides the variable; the read-aloud voice and dictation languages are managed there too.
 
 ### SSO / OIDC (optional)
 
@@ -239,7 +236,6 @@ Redirect URIs follow `https://<PHX_HOST>/auth/<provider>/callback`.
 | `EDSPACE_PLATFORM_ADMINS` | Comma-separated emails granted platform-admin on reconciliation — used to bootstrap the first admin (see [Manual user creation](#manual-user-creation)) | — | first install |
 | `PDF_ENABLED` | Headless-Chromium PDF export | `true` | no |
 | `CHROMIC_PDF_POOL_SIZE` | Concurrent Chromium sessions (memory cost each) | `4` | no |
-| `DEBUG_AUTH_FAILURES` | Log detailed SSO failure reasons — may log personal data, troubleshooting only | `false` | no |
 
 A further set of internal tuning variables (pool/timeout/BEAM settings, listed at the end of [docs/env-vars.md](docs/env-vars.md)) should only be changed under guidance from EdSpace support.
 
@@ -247,7 +243,7 @@ A further set of internal tuning variables (pool/timeout/BEAM settings, listed a
 
 ### Platform settings (in-app)
 
-Product-behavior settings are **not** environment variables: a platform admin manages them on the backoffice **Platform settings** page, where a save applies to every node within moments, without a restart. That page controls the default AI models, the assistant chat-tool switches (including per-tool kill switches), the fair-use token allowance, and the member-purge safeguards, and shows each setting's currently effective value and where it comes from. A value saved there overrides the deployment's environment; clearing it falls back again. The one exception is the purge kill switch, where env (`MEMBER_PURGE_ENABLED`) and the page each independently stop the sweep — see [docs/configuration.md](docs/configuration.md#runtime-platform-settings-not-env-vars).
+Product-behavior settings are **not** environment variables: a platform admin manages them on the backoffice **Platform settings** page, where a save applies to every node within moments, without a restart. That page controls the default AI models, the assistant chat-tool switches (including per-tool kill switches), the fair-use token allowance, the member-purge safeguards, the speech switch/voice/dictation languages, the email sender name, and a time-boxed sign-in diagnostics window (detailed failure logging that switches itself off, since it logs personal data), and shows each setting's currently effective value and where it comes from. A value saved there overrides the deployment's environment; clearing it falls back again. The one exception is the purge kill switch, where env (`MEMBER_PURGE_ENABLED`) and the page each independently stop the sweep — see [docs/configuration.md](docs/configuration.md#runtime-platform-settings-not-env-vars).
 
 ### User Authentication
 

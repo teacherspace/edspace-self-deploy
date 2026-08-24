@@ -1169,7 +1169,7 @@
               ]
             }
           ],
-          "description": "Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; set to \"false\" when no Azure Speech resource is available."
+          "description": "Deployment default for the speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; the packaging sets it to \"false\" until an Azure Speech resource is provided."
         },
         "AZURE_SPEECH_KEY": {
           "not": {},
@@ -1182,18 +1182,6 @@
         "AZURE_SPEECH_ENDPOINT": {
           "type": "string",
           "description": "Azure Speech endpoint override."
-        },
-        "EDSPACE_SPEECH_RECOGNITION_LANGUAGE": {
-          "type": "string",
-          "description": "Primary speech-to-text language."
-        },
-        "EDSPACE_SPEECH_RECOGNITION_LANGUAGES": {
-          "type": "string",
-          "description": "Comma-separated set of languages offered for speech-to-text."
-        },
-        "EDSPACE_SPEECH_VOICE": {
-          "type": "string",
-          "description": "Default text-to-speech voice."
         },
         "MAILER_ADAPTER": {
           "not": {},
@@ -1330,21 +1318,6 @@
         "PRAXIS_PRODUCT_URL": {
           "type": "string",
           "description": "Praxis product URL used in license redirects."
-        },
-        "DEBUG_AUTH_FAILURES": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "Set to \"true\" to log detailed SSO failure reasons. WARNING - logs may then contain personal data; enable only while troubleshooting."
         },
         "EDSPACE_PLATFORM_ADMINS": {
           "type": "string",
@@ -1958,7 +1931,7 @@
               ]
             }
           ],
-          "description": "Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; set to \"false\" when no Azure Speech resource is available."
+          "description": "Deployment default for the speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; the packaging sets it to \"false\" until an Azure Speech resource is provided."
         },
         "AZURE_SPEECH_KEY": {
           "type": "string",
@@ -1971,18 +1944,6 @@
         "AZURE_SPEECH_ENDPOINT": {
           "type": "string",
           "description": "Azure Speech endpoint override."
-        },
-        "EDSPACE_SPEECH_RECOGNITION_LANGUAGE": {
-          "type": "string",
-          "description": "Primary speech-to-text language."
-        },
-        "EDSPACE_SPEECH_RECOGNITION_LANGUAGES": {
-          "type": "string",
-          "description": "Comma-separated set of languages offered for speech-to-text."
-        },
-        "EDSPACE_SPEECH_VOICE": {
-          "type": "string",
-          "description": "Default text-to-speech voice."
         },
         "MAILER_ADAPTER": {
           "not": {},
@@ -2119,21 +2080,6 @@
         "PRAXIS_PRODUCT_URL": {
           "type": "string",
           "description": "Praxis product URL used in license redirects."
-        },
-        "DEBUG_AUTH_FAILURES": {
-          "anyOf": [
-            {
-              "type": "boolean"
-            },
-            {
-              "type": "string",
-              "enum": [
-                "true",
-                "false"
-              ]
-            }
-          ],
-          "description": "Set to \"true\" to log detailed SSO failure reasons. WARNING - logs may then contain personal data; enable only while troubleshooting."
         },
         "EDSPACE_PLATFORM_ADMINS": {
           "type": "string",
