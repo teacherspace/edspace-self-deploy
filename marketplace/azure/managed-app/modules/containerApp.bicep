@@ -40,6 +40,8 @@ param secretKeyBase string
 param tokenSigningSecret string
 @secure()
 param mailpaceApiKey string
+@secure()
+param mailSmtpPassword string = ''
 // getSecret() cannot sit inside a ternary at the call site, so both sources
 // arrive and the selection happens here.
 @secure()
@@ -77,8 +79,18 @@ param speechEnabled bool
 param speechRegion string = ''
 
 // --- mailer (plain) ---
-param mailFromEmail string
+// 'none' is a first-class mode, not a degraded one: EdSpace only ever sends
+// sign-in, password-reset and invitation mail, so a school whose users all
+// arrive through SSO needs no mail provider. The app then offers a password
+// form on /sign-in and hands invitation links to the inviting admin.
+@allowed(['mailpace', 'smtp', 'none'])
+param mailerAdapter string = 'mailpace'
+param mailFromEmail string = ''
 param mailFromName string = 'EdSpace'
+param mailSmtpRelay string = ''
+param mailSmtpPort int = 587
+param mailSmtpSsl bool = false
+param mailSmtpUsername string = ''
 
 var sizes = {
   standard: { cpu: '1.0', memory: '2Gi' }
@@ -98,11 +110,19 @@ var baseSecrets = [
   { name: 'database-url', value: databaseUrl }
   { name: 'azure-storage-key', value: storageAccountKey }
   { name: 'llm-api-key', value: llmApiKey }
-  { name: 'mailpace-api-key', value: mailpaceApiKey }
   { name: 'registry-password', value: registryPassword }
 ]
-// ACA rejects empty secret values, so the speech key is only present when set.
-var secrets = concat(baseSecrets, empty(speechKey) ? [] : [{ name: 'azure-speech-key', value: speechKey }])
+// ACA rejects empty secret values, so every conditional credential is added
+// only when the adapter that uses it is selected AND a value was supplied.
+var mailerSecrets = concat(
+  mailerAdapter == 'mailpace' && !empty(mailpaceApiKey) ? [{ name: 'mailpace-api-key', value: mailpaceApiKey }] : [],
+  mailerAdapter == 'smtp' && !empty(mailSmtpPassword) ? [{ name: 'smtp-password', value: mailSmtpPassword }] : []
+)
+var secrets = concat(
+  baseSecrets,
+  mailerSecrets,
+  empty(speechKey) ? [] : [{ name: 'azure-speech-key', value: speechKey }]
+)
 
 var plainEnv = [
   { name: 'PHX_HOST', value: phxHost }
@@ -116,7 +136,7 @@ var plainEnv = [
   { name: 'EDSPACE_LLM_SMALL_DEPLOYMENT', value: llmSmallDeployment }
   { name: 'EDSPACE_LLM_EMBEDDING_DEPLOYMENT', value: llmEmbeddingDeployment }
   { name: 'EDSPACE_SPEECH_ENABLED', value: speechEnabled ? 'true' : 'false' }
-  { name: 'MAILER_FROM_EMAIL', value: mailFromEmail }
+  { name: 'MAILER_ADAPTER', value: mailerAdapter }
   // Chromium sessions cost ~250Mi each; the app default of 4 risks OOM on the
   // 2 GiB standard size, so cap PDF rendering concurrency here.
   { name: 'CHROMIC_PDF_POOL_SIZE', value: '2' }
@@ -128,7 +148,6 @@ var secretEnv = [
   { name: 'DATABASE_URL', secretRef: 'database-url' }
   { name: 'AZURE_STORAGE_KEY', secretRef: 'azure-storage-key' }
   { name: 'EDSPACE_LLM_API_KEY', secretRef: 'llm-api-key' }
-  { name: 'MAILPACE_API_KEY', secretRef: 'mailpace-api-key' }
 ]
 
 var conditionalEnv = concat(
@@ -140,7 +159,20 @@ var conditionalEnv = concat(
   empty(speechKey) ? [] : [{ name: 'AZURE_SPEECH_KEY', secretRef: 'azure-speech-key' }],
   // Omitted when blank: a set-but-empty MAILER_FROM_NAME would override the
   // app's "EdSpace" default with an empty from-name.
-  empty(mailFromName) ? [] : [{ name: 'MAILER_FROM_NAME', value: mailFromName }]
+  empty(mailFromName) ? [] : [{ name: 'MAILER_FROM_NAME', value: mailFromName }],
+  // A blank MAILER_FROM_EMAIL counts as missing and fails the app's boot
+  // check, so it is emitted only for the adapters that read it.
+  mailerAdapter == 'none' ? [] : [{ name: 'MAILER_FROM_EMAIL', value: mailFromEmail }],
+  mailerAdapter == 'mailpace' && !empty(mailpaceApiKey) ? [{ name: 'MAILPACE_API_KEY', secretRef: 'mailpace-api-key' }] : [],
+  mailerAdapter == 'smtp' ? [
+    { name: 'MAILER_SMTP_RELAY', value: mailSmtpRelay }
+    { name: 'MAILER_SMTP_PORT', value: string(mailSmtpPort) }
+    // Under implicit TLS the app flips its STARTTLS default to 'never' on its
+    // own, so this one variable carries the whole choice.
+    { name: 'MAILER_SMTP_SSL', value: mailSmtpSsl ? 'true' : 'false' }
+  ] : [],
+  mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? [{ name: 'MAILER_SMTP_USERNAME', value: mailSmtpUsername }] : [],
+  mailerAdapter == 'smtp' && !empty(mailSmtpPassword) ? [{ name: 'MAILER_SMTP_PASSWORD', secretRef: 'smtp-password' }] : []
 )
 
 resource app 'Microsoft.App/containerApps@2025-01-01' = {

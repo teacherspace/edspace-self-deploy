@@ -180,11 +180,38 @@
     "mailer": {
       "type": "object",
       "properties": {
+        "adapter": {
+          "enum": ["mailpace", "smtp", "none"],
+          "description": "Delivery backend. 'none' disables transactional email; sign-in then relies on passwords and/or SSO and invitation links are handed over manually."
+        },
         "fromEmail": { "type": "string" },
         "fromName": { "type": "string" },
         "mailpaceApiKey": { "type": "string" },
-        "existingSecret": { "type": "string" },
-        "existingSecretKey": { "type": "string" }
+        "smtp": {
+          "type": "object",
+          "description": "Settings for adapter smtp. Leave tls/auth empty to keep the application's own defaults, which depend on ssl and username.",
+          "properties": {
+            "relay": { "type": "string" },
+            "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
+            "username": { "type": "string" },
+            "password": { "type": "string" },
+            "ssl": { "type": "boolean" },
+            "tls": { "enum": ["", "always", "never", "if_available"] },
+            "auth": { "enum": ["", "always", "never", "if_available"] },
+            "tlsVerify": { "type": "boolean" },
+            "caCertFile": { "type": "string" },
+            "noMxLookups": { "type": "boolean" }
+          },
+          "additionalProperties": false
+        },
+        "existingSecret": {
+          "type": "string",
+          "description": "Customer-managed Secret holding the mailer credential - the MailPace API key, or the SMTP password when adapter is smtp."
+        },
+        "existingSecretKey": {
+          "type": "string",
+          "description": "Key inside existingSecret. Defaults to mailpace-api-key for adapter mailpace and smtp-password for adapter smtp."
+        }
       },
       "additionalProperties": false
     },
@@ -615,41 +642,68 @@
       ]
     },
     {
-      "$comment": "MailPace is the only production mailer and its API key is required.",
-      "anyOf": [
-        { "properties": { "mailer": { "properties": { "mailpaceApiKey": { "minLength": 1 } }, "required": ["mailpaceApiKey"] } } },
-        { "properties": { "mailer": { "properties": { "existingSecret": { "minLength": 1 } }, "required": ["existingSecret"] } } },
-        { "properties": { "extraEnvFrom": { "minItems": 1 } } },
-        {
-          "properties": {
-            "extraEnv": {
-              "contains": {
-                "type": "object",
-                "properties": { "name": { "const": "MAILPACE_API_KEY" } },
-                "required": ["name"]
+      "$comment": "adapter mailpace needs an API key, from a value or a customer-managed Secret.",
+      "if": { "properties": { "mailer": { "properties": { "adapter": { "enum": ["mailpace"] } } } } },
+      "then": {
+        "anyOf": [
+          { "properties": { "mailer": { "properties": { "mailpaceApiKey": { "minLength": 1 } }, "required": ["mailpaceApiKey"] } } },
+          { "properties": { "mailer": { "properties": { "existingSecret": { "minLength": 1 } }, "required": ["existingSecret"] } } },
+          { "properties": { "extraEnvFrom": { "minItems": 1 } } },
+          {
+            "properties": {
+              "extraEnv": {
+                "contains": {
+                  "type": "object",
+                  "properties": { "name": { "const": "MAILPACE_API_KEY" } },
+                  "required": ["name"]
+                }
               }
             }
           }
-        }
-      ]
+        ]
+      }
     },
     {
-      "$comment": "Transactional email requires a verified sender address.",
-      "anyOf": [
-        { "properties": { "mailer": { "properties": { "fromEmail": { "minLength": 1 } }, "required": ["fromEmail"] } } },
-        { "properties": { "extraEnvFrom": { "minItems": 1 } } },
-        {
-          "properties": {
-            "extraEnv": {
-              "contains": {
-                "type": "object",
-                "properties": { "name": { "const": "MAILER_FROM_EMAIL" } },
-                "required": ["name"]
+      "$comment": "adapter smtp needs a relay host; the app raises at boot without one.",
+      "if": { "properties": { "mailer": { "properties": { "adapter": { "enum": ["smtp"] } } } } },
+      "then": {
+        "anyOf": [
+          { "properties": { "mailer": { "properties": { "smtp": { "properties": { "relay": { "minLength": 1 } }, "required": ["relay"] } }, "required": ["smtp"] } } },
+          { "properties": { "extraEnvFrom": { "minItems": 1 } } },
+          {
+            "properties": {
+              "extraEnv": {
+                "contains": {
+                  "type": "object",
+                  "properties": { "name": { "const": "MAILER_SMTP_RELAY" } },
+                  "required": ["name"]
+                }
               }
             }
           }
-        }
-      ]
+        ]
+      }
+    },
+    {
+      "$comment": "Any real provider needs a verified sender address; adapter none does not.",
+      "if": { "properties": { "mailer": { "properties": { "adapter": { "enum": ["mailpace", "smtp"] } } } } },
+      "then": {
+        "anyOf": [
+          { "properties": { "mailer": { "properties": { "fromEmail": { "minLength": 1 } }, "required": ["fromEmail"] } } },
+          { "properties": { "extraEnvFrom": { "minItems": 1 } } },
+          {
+            "properties": {
+              "extraEnv": {
+                "contains": {
+                  "type": "object",
+                  "properties": { "name": { "const": "MAILER_FROM_EMAIL" } },
+                  "required": ["name"]
+                }
+              }
+            }
+          }
+        ]
+      }
     },
     {
       "$comment": "Azure LLM deployments need an endpoint and all three deployment names.",

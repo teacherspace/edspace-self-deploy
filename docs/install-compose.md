@@ -5,7 +5,8 @@ For pilots, evaluations and small single-host installs. Postgres (with pgvector)
 ## Prerequisites
 
 - Docker Engine 24+ with the compose plugin, on a host with ≥ 4 CPU / 8 GiB.
-- Registry credentials from EdSpace, an LLM provider key, a MailPace API token.
+- Registry credentials from EdSpace and an LLM provider key.
+- A MailPace API token or an SMTP relay for transactional email — or set `MAILER_ADAPTER=none` to run without it ([configuration.md](configuration.md#transactional-email)).
 
 ## Setup
 
@@ -14,7 +15,7 @@ docker login edspace.azurecr.io -u <user> -p <token>
 cd compose
 cp .env.example .env
 ../scripts/generate-secrets.sh >> .env   # SECRET_KEY_BASE, TOKEN_SIGNING_SECRET, POSTGRES_PASSWORD
-$EDITOR .env                             # PHX_HOST, EDSPACE_LLM_*, MAILPACE_API_KEY, MAILER_FROM_EMAIL, EDSPACE_IMAGE_TAG
+$EDITOR .env                             # PHX_HOST, EDSPACE_LLM_*, MAILER_* , EDSPACE_IMAGE_TAG
 docker compose up -d
 ```
 

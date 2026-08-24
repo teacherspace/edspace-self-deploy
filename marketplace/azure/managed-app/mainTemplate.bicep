@@ -131,15 +131,37 @@ param byoLlmApiVersion string = ''
 @description('Custom public hostname. Leave empty to use the generated *.azurecontainerapps.io address. Custom domains are bound post-install by EdSpace support (see README).')
 param customDomain string = ''
 
+@description('Transactional-email backend. "none" disables email: sign-in then uses a password and/or SSO, and invitation links are shown to the inviting admin to pass on.')
+@allowed(['mailpace', 'smtp', 'none'])
+param mailerAdapter string = 'mailpace'
+
 @secure()
-@description('MailPace API key. Transactional email is required — invitations and magic-link sign-in depend on it.')
+@description('MailPace API key. Required when the mailer is MailPace.')
 param mailpaceApiKey string = ''
 
-@description('From address for all outgoing email (must be a verified MailPace domain).')
-param mailFromEmail string
+@description('From address for all outgoing email, verified with your provider. Required unless the mailer is "none".')
+param mailFromEmail string = ''
 
 @description('Display name for outgoing email.')
 param mailFromName string = 'EdSpace'
+
+@description('SMTP relay hostname. Required when the mailer is SMTP.')
+param mailSmtpRelay string = ''
+
+@description('SMTP relay port. 587 is the STARTTLS submission port.')
+@minValue(1)
+@maxValue(65535)
+param mailSmtpPort int = 587
+
+@description('Implicit TLS from the first byte, paired with port 465. Leave false for the ordinary STARTTLS submission port.')
+param mailSmtpSsl bool = false
+
+@description('SMTP username. Leave empty for a relay that does not authenticate.')
+param mailSmtpUsername string = ''
+
+@secure()
+@description('SMTP password for the username above.')
+param mailSmtpPassword string = ''
 
 // ------------------------------------------------------------------- license
 @description('Container registry host serving the EdSpace image. Leave at the default unless EdSpace support directs otherwise.')
@@ -410,10 +432,26 @@ resource pgAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = 
   properties: { value: 'E1!${replace(pgPasswordSeed, '-', '')}' }
 }
 
+// Both mailer credentials are always created, with a placeholder when the
+// selected adapter does not use them: getSecret() cannot sit behind a
+// conditional at the module call site, and Key Vault rejects an empty value.
 resource mailpaceApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'mailpace-api-key'
-  properties: { value: mailpaceApiKey }
+  // Placeholder ONLY when another adapter is selected. Under 'mailpace' the
+  // real key goes in unmodified, so a CLI deployment that forgot it hits Key
+  // Vault's empty-value rejection and fails here — instead of installing an
+  // app that boots green and then has every message refused by MailPace.
+  properties: { value: mailerAdapter == 'mailpace' ? mailpaceApiKey : 'unused-mailer-adapter-${mailerAdapter}' }
+}
+
+// An SMTP relay on a trusted network may take no credentials at all, so an
+// empty password here is legitimate and takes the placeholder; the container
+// app then omits MAILER_SMTP_PASSWORD entirely.
+resource smtpPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
+  parent: keyVault
+  name: 'smtp-password'
+  properties: { value: mailerAdapter == 'smtp' && !empty(mailSmtpPassword) ? mailSmtpPassword : 'unused-mailer-adapter-${mailerAdapter}' }
 }
 
 resource registryPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
@@ -475,7 +513,8 @@ module app 'modules/containerApp.bicep' = {
 
     secretKeyBase: keyVault.getSecret('secret-key-base')
     tokenSigningSecret: keyVault.getSecret('token-signing-secret')
-    mailpaceApiKey: keyVault.getSecret('mailpace-api-key')
+    mailpaceApiKey: mailerAdapter == 'mailpace' ? keyVault.getSecret('mailpace-api-key') : ''
+    mailSmtpPassword: mailerAdapter == 'smtp' && !empty(mailSmtpPassword) ? keyVault.getSecret('smtp-password') : ''
     llmApiKeyFromKv: keyVault.getSecret('llm-api-key')
     // BCP422: lazy if() — listKeys only evaluates when enableAzureAi is true,
     // so the conditional resource is guaranteed to exist at call time.
@@ -509,14 +548,20 @@ module app 'modules/containerApp.bicep' = {
     speechEnabled: enableAzureAi && enableSpeech
     speechRegion: enableAzureAi && enableSpeech ? aiLocation : ''
 
+    mailerAdapter: mailerAdapter
     mailFromEmail: mailFromEmail
     mailFromName: mailFromName
+    mailSmtpRelay: mailSmtpRelay
+    mailSmtpPort: mailSmtpPort
+    mailSmtpSsl: mailSmtpSsl
+    mailSmtpUsername: mailSmtpUsername
   }
   dependsOn: [
     secretKeyBaseSecret
     tokenSigningSecret
     pgAdminPasswordSecret
     mailpaceApiKeySecret
+    smtpPasswordSecret
     registryPasswordSecret
     llmApiKeySecret
     aiModelDeployments

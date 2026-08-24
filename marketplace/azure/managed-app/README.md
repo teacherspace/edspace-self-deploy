@@ -27,6 +27,23 @@ az deployment group create -g rg-edspace \
   -f azuredeploy.json -p @my.parameters.json
 ```
 
+**Choosing a mailer.** `mailerAdapter` is `mailpace` (the default), `smtp`, or
+`none`:
+
+- `smtp` — drop `mailpaceApiKey` and set `mailSmtpRelay`, plus
+  `mailSmtpUsername`/`mailSmtpPassword` if the relay authenticates. For
+  implicit TLS set `mailSmtpSsl: true` and `mailSmtpPort: 465`; otherwise the
+  defaults give STARTTLS on 587 with the relay's certificate verified.
+- `none` — drop `mailpaceApiKey` and `mailFromEmail` entirely. EdSpace only
+  ever emails about account access, so a school whose users all arrive through
+  SSO needs no provider; the app then offers a password form on `/sign-in` and
+  shows each invitation's link to the inviting admin. There is no self-service
+  password recovery in this mode — see the root
+  [docs/limitations.md](../../../docs/limitations.md).
+
+A missing credential fails the deployment (Key Vault rejects the empty value)
+rather than installing an app that cannot send.
+
 Fresh installs use the default `bootstrapSecrets=true`. Infra changes to an
 **existing** instance must add `-p bootstrapSecrets=false` — see the secret
 model below; forgetting it rotates every generated secret.
@@ -68,8 +85,13 @@ will be authorized on the test definition; it rejects missing/zero values.
 - On **first install** (`bootstrapSecrets=true`, pinned by createUiDefinition)
   the template generates `SECRET_KEY_BASE`, `TOKEN_SIGNING_SECRET` and the PG
   admin password from `newGuid()` parameter defaults and persists them —
-  along with the user-supplied MailPace key, registry token, and BYO LLM key —
-  into the instance Key Vault (`kv-eds-<suffix>`).
+  along with the user-supplied mailer credential, registry token, and BYO LLM
+  key — into the instance Key Vault (`kv-eds-<suffix>`).
+- Both `mailpace-api-key` and `smtp-password` are always created, holding a
+  `unused-mailer-adapter-…` placeholder for whichever adapter was not chosen:
+  `getSecret()` cannot sit behind a conditional at a module call site, and Key
+  Vault rejects an empty value. The container app binds only the one its
+  adapter uses.
 - **Every consumer reads from the vault** via `getSecret()`; raw parameters
   are never used directly downstream.
 - A Key Vault secret PUT always writes a new version, and `newGuid()` defaults
@@ -172,8 +194,11 @@ validation + the customer can't touch the managed RG):
 | Template parameter | App env var |
 |---|---|
 | `customDomain` (or generated FQDN) | `PHX_HOST`, `PHX_CHECK_ORIGIN` |
-| `mailpaceApiKey` | `MAILPACE_API_KEY` |
-| `mailFromEmail` / `mailFromName` | `MAILER_FROM_EMAIL` / `MAILER_FROM_NAME` |
+| `mailerAdapter` | `MAILER_ADAPTER` |
+| `mailpaceApiKey` | `MAILPACE_API_KEY` (adapter `mailpace` only) |
+| `mailFromEmail` / `mailFromName` | `MAILER_FROM_EMAIL` / `MAILER_FROM_NAME` (omitted under adapter `none`) |
+| `mailSmtpRelay` / `mailSmtpPort` / `mailSmtpSsl` | `MAILER_SMTP_RELAY` / `MAILER_SMTP_PORT` / `MAILER_SMTP_SSL` (adapter `smtp` only) |
+| `mailSmtpUsername` / `mailSmtpPassword` | `MAILER_SMTP_USERNAME` / `MAILER_SMTP_PASSWORD` (adapter `smtp` only) |
 | `byoLlmBaseUrl` / AI account endpoint | `EDSPACE_LLM_BASE_URL` |
 | `byoLlmApiKey` / AI account key1 | `EDSPACE_LLM_API_KEY` |
 | `byoLlm*Deployment` / fixed model names | `EDSPACE_LLM_{TEXT,SMALL,EMBEDDING}_DEPLOYMENT` |

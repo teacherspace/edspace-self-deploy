@@ -2,9 +2,13 @@
 
 Current limitations of the self-deploy packaging and the app, with their workarounds. Items marked *(app change planned)* are tracked against the application itself.
 
-## Email is MailPace-only *(app change planned)*
+## No self-service password recovery without email
 
-Transactional email uses the MailPace HTTP API exclusively — the app refuses to boot in production without `MAILPACE_API_KEY`, and generic SMTP is not yet supported. Every install therefore needs a MailPace account with a verified sender.
+Resolved since the previous release: email is no longer MailPace-only. `MAILER_ADAPTER` now selects MailPace, any SMTP relay, or `none` — see [Transactional email](configuration.md#transactional-email).
+
+What remains is a consequence of running with `MAILER_ADAPTER=none`. Magic links and password reset both need to send a message, so with email off a user who forgets their password needs a platform admin to set a new one from the backoffice (**Users → the user → Set password**), which is a staff-only action — a school admin cannot do it. Configuring an OIDC provider avoids the problem entirely.
+
+Invitations in this mode are also delivered by hand: after inviting someone, the backoffice shows a single-use onboarding link, valid for 7 days, for you to pass on through a channel you already trust.
 
 ## No S3-compatible storage yet *(app change planned)*
 

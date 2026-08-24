@@ -74,9 +74,20 @@ CHART_STRUCTURED_VARS = {
     "EDSPACE_LLM_SMALL_DEPLOYMENT",
     "EDSPACE_LLM_EMBEDDING_MODEL",
     "EDSPACE_LLM_EMBEDDING_DEPLOYMENT",
+    "MAILER_ADAPTER",
     "MAILER_FROM_EMAIL",
     "MAILER_FROM_NAME",
     "MAILPACE_API_KEY",
+    "MAILER_SMTP_RELAY",
+    "MAILER_SMTP_PORT",
+    "MAILER_SMTP_USERNAME",
+    "MAILER_SMTP_PASSWORD",
+    "MAILER_SMTP_SSL",
+    "MAILER_SMTP_TLS",
+    "MAILER_SMTP_AUTH",
+    "MAILER_SMTP_TLS_VERIFY",
+    "MAILER_SMTP_CACERTFILE",
+    "MAILER_SMTP_NO_MX_LOOKUPS",
 }
 
 GENERATED_BANNER = "GENERATED FILE - edit config/contract.yaml and run `make gen`."
@@ -90,7 +101,18 @@ def load_contract() -> tuple[list[dict], list[dict]]:
     data = yaml.safe_load(CONTRACT.read_text())
     categories = data.get("categories") or []
     variables = data.get("vars") or []
+    excluded = data.get("excluded") or []
     errors: list[str] = []
+
+    # Deliberate omissions, consumed by scripts/check-contract-parity.py.
+    # Validated here so a malformed entry fails at `make gen` rather than
+    # silently widening what the parity check ignores.
+    for i, rule in enumerate(excluded):
+        if not isinstance(rule, dict) or bool(rule.get("name")) == bool(rule.get("prefix")):
+            errors.append(f"excluded[{i}]: needs exactly one of `name` or `prefix`")
+            continue
+        if not rule.get("reason"):
+            errors.append(f"excluded[{i}]: missing reason")
 
     cat_ids = [c["id"] for c in categories]
     if len(set(cat_ids)) != len(cat_ids):
@@ -119,6 +141,14 @@ def load_contract() -> tuple[list[dict], list[dict]]:
         req = v.get("required", False)
         if not (isinstance(req, bool) or isinstance(req, dict)):
             errors.append(f"{name}: required must be bool or {{chart,compose}} map")
+        rw = v.get("required_when")
+        if rw is not None and not (isinstance(rw, str) and rw.strip()):
+            errors.append(f"{name}: required_when must be a non-empty string")
+        if rw and req is True:
+            errors.append(
+                f"{name}: required_when contradicts required: true "
+                "(use a per-context map, or drop one of them)"
+            )
         if v.get("secret") and v.get("example"):
             errors.append(f"{name}: secret vars must not carry an example value")
         if v.get("source") in ("computed", "fixed") and name not in PRODUCED_VARS:
@@ -128,6 +158,21 @@ def load_contract() -> tuple[list[dict], list[dict]]:
 
     for name in sorted(CHART_STRUCTURED_VARS - seen):
         errors.append(f"{name}: chart structured var is missing from the contract")
+
+    for rule in excluded:
+        if not isinstance(rule, dict):
+            continue
+        clash = sorted(
+            n
+            for n in seen
+            if n == rule.get("name")
+            or (rule.get("prefix") and n.startswith(rule["prefix"]))
+        )
+        if clash:
+            errors.append(
+                f"excluded {rule.get('name') or rule['prefix']!r} also appears "
+                f"in vars: {', '.join(clash)}"
+            )
 
     if errors:
         raise ContractError("contract.yaml invalid:\n  " + "\n  ".join(errors))
@@ -186,7 +231,9 @@ def gen_env_example(categories: list[dict], variables: list[dict]) -> str:
             lines += wrap_comment(v["description"])
             if v.get("enum"):
                 lines.append("# One of: " + ", ".join(v["enum"]))
-            if required_for(v, "compose"):
+            if v.get("required_when"):
+                lines += wrap_comment("Required when " + v["required_when"] + ".")
+            elif required_for(v, "compose"):
                 lines.append("# Required.")
             default = default_for(v, "compose")
             if v.get("example") and not default:
@@ -342,6 +389,8 @@ def gen_docs(categories: list[dict], variables: list[dict]) -> str:
                 req_s = ", ".join(k for k, val in sorted(req.items()) if val) or "no"
             else:
                 req_s = "yes" if req else "no"
+            if v.get("required_when"):
+                req_s = "conditional"
             if v["source"] in ("computed", "fixed"):
                 req_s = "*managed*"
             # Deploy-tier vars have no app default; fall back to the compose one.
@@ -351,6 +400,8 @@ def gen_docs(categories: list[dict], variables: list[dict]) -> str:
                 desc += " " + " ".join(v["notes"].split())
             if v["type"] == "enum":
                 desc += " One of: " + ", ".join(f"`{e}`" for e in v["enum"]) + "."
+            if v.get("required_when"):
+                desc += " **Required when** " + " ".join(v["required_when"].split()) + "."
             lines.append(
                 f"| `{v['name']}` | {req_s} | {md_escape(default)} | "
                 f"{'yes' if v['secret'] else ''} | {md_escape(desc)} |"

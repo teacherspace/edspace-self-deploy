@@ -185,13 +185,21 @@ no existingSecret) they flow through the chart Secret via envFrom instead.
       key: {{ .existingSecretKey | default "llm-api-key" }}
 {{- end }}
 {{- end }}
+{{/* The mailer credential is the MailPace API key or the SMTP password,
+depending on the adapter; `none` has no credential at all. */}}
 {{- with .Values.mailer }}
-{{- if .existingSecret }}
+{{- if and .existingSecret (eq .adapter "mailpace") }}
 - name: MAILPACE_API_KEY
   valueFrom:
     secretKeyRef:
       name: {{ .existingSecret }}
       key: {{ .existingSecretKey | default "mailpace-api-key" }}
+{{- else if and .existingSecret (eq .adapter "smtp") }}
+- name: MAILER_SMTP_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ .existingSecret }}
+      key: {{ .existingSecretKey | default "smtp-password" }}
 {{- end }}
 {{- end }}
 {{- if eq .Values.storage.adapter "azure_blob" }}
@@ -255,11 +263,37 @@ EDSPACE_LLM_EMBEDDING_MODEL: {{ . | quote }}
 {{- with .Values.llm.embeddingDeployment }}
 EDSPACE_LLM_EMBEDDING_DEPLOYMENT: {{ . | quote }}
 {{- end }}
-{{- with .Values.mailer.fromEmail }}
-MAILER_FROM_EMAIL: {{ . | quote }}
+{{- with .Values.mailer }}
+MAILER_ADAPTER: {{ .adapter | quote }}
+{{- if ne .adapter "none" }}
+MAILER_FROM_EMAIL: {{ required "mailer.fromEmail is required unless mailer.adapter is none" .fromEmail | quote }}
 {{- end }}
-{{- with .Values.mailer.fromName }}
+{{- with .fromName }}
 MAILER_FROM_NAME: {{ . | quote }}
+{{- end }}
+{{- if eq .adapter "smtp" }}
+{{- with .smtp }}
+MAILER_SMTP_RELAY: {{ required "mailer.smtp.relay is required with mailer.adapter=smtp" .relay | quote }}
+MAILER_SMTP_PORT: {{ .port | toString | quote }}
+MAILER_SMTP_SSL: {{ .ssl | toString | quote }}
+MAILER_SMTP_TLS_VERIFY: {{ .tlsVerify | toString | quote }}
+MAILER_SMTP_NO_MX_LOOKUPS: {{ .noMxLookups | toString | quote }}
+{{- with .username }}
+MAILER_SMTP_USERNAME: {{ . | quote }}
+{{- end }}
+{{/* Empty tls/auth mean "keep the app default", which is computed from
+ssl/username - emitting the variable at all would override that. */}}
+{{- with .tls }}
+MAILER_SMTP_TLS: {{ . | quote }}
+{{- end }}
+{{- with .auth }}
+MAILER_SMTP_AUTH: {{ . | quote }}
+{{- end }}
+{{- with .caCertFile }}
+MAILER_SMTP_CACERTFILE: {{ . | quote }}
+{{- end }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- range $k, $v := .Values.env }}
 {{ $k }}: {{ $v | toString | quote }}
@@ -280,8 +314,15 @@ TOKEN_SIGNING_SECRET: {{ $s.tokenSigningSecret | quote }}
 RELEASE_COOKIE: {{ . | quote }}
 {{- end }}
 {{- end }}
-{{- if and .Values.mailer.mailpaceApiKey (not .Values.mailer.existingSecret) }}
-MAILPACE_API_KEY: {{ .Values.mailer.mailpaceApiKey | quote }}
+{{- with .Values.mailer }}
+{{- if not .existingSecret }}
+{{- if and (eq .adapter "mailpace") .mailpaceApiKey }}
+MAILPACE_API_KEY: {{ .mailpaceApiKey | quote }}
+{{- end }}
+{{- if and (eq .adapter "smtp") .smtp.password }}
+MAILER_SMTP_PASSWORD: {{ .smtp.password | quote }}
+{{- end }}
+{{- end }}
 {{- end }}
 {{- if and .Values.llm.apiKey (not .Values.llm.existingSecret) }}
 EDSPACE_LLM_API_KEY: {{ .Values.llm.apiKey | quote }}

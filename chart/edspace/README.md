@@ -79,11 +79,13 @@ Kubernetes: `>=1.27.0-0`
 | llm.smallModel | string | `""` |  |
 | llm.textDeployment | string | `""` | Azure deployment name for the text model. |
 | llm.textModel | string | `""` | provider:model overrides; empty = app defaults. |
-| mailer.existingSecret | string | `""` |  |
-| mailer.existingSecretKey | string | `"mailpace-api-key"` |  |
-| mailer.fromEmail | string | `""` | Verified MailPace sender address (MAILER_FROM_EMAIL). |
+| mailer.adapter | string | `"mailpace"` | Delivery backend: `mailpace`, `smtp`, or `none`. With `none` the app sends nothing: sign-in falls back to passwords and/or SSO, and invitation links are shown to the inviting admin to pass on by hand. Pick it for a deployment whose users all arrive over SSO or a roster feed. |
+| mailer.existingSecret | string | `""` | Customer-managed Secret holding the mailer credential: the MailPace API key, or the SMTP password when adapter is `smtp`. |
+| mailer.existingSecretKey | string | `""` | Key inside existingSecret. Empty resolves per adapter: `mailpace-api-key` for `mailpace`, `smtp-password` for `smtp`. |
+| mailer.fromEmail | string | `""` | Sender address (MAILER_FROM_EMAIL), verified with the provider. Required unless adapter is `none`. |
 | mailer.fromName | string | `""` |  |
-| mailer.mailpaceApiKey | string | `""` | MailPace API token — the app requires it in production. Prefer existingSecret. |
+| mailer.mailpaceApiKey | string | `""` | MailPace API token, for adapter `mailpace`. Prefer existingSecret. |
+| mailer.smtp | object | `{"auth":"","caCertFile":"","noMxLookups":true,"password":"","port":587,"relay":"","ssl":false,"tls":"","tlsVerify":true,"username":""}` | Settings for adapter `smtp`. Leave `tls`/`auth` empty to keep the application's own defaults, which depend on `ssl` and `username`: mandatory STARTTLS unless `ssl` is on, and authentication once a username is set. |
 | migrate.activeDeadlineSeconds | int | `600` |  |
 | migrate.backoffLimit | int | `3` |  |
 | migrate.enabled | bool | `true` | Run migrations as a pre-upgrade Job so a failed migration aborts before pods roll. First install migrates at app boot. |

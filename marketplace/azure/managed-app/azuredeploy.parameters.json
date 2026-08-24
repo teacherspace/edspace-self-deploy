@@ -8,6 +8,9 @@
     "registryPassword": {
       "value": "REPLACE-with-password-from-your-EdSpace-welcome-email"
     },
+    "mailerAdapter": {
+      "value": "mailpace"
+    },
     "mailpaceApiKey": {
       "value": "REPLACE-with-your-MailPace-API-key"
     },

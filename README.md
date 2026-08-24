@@ -30,7 +30,7 @@ updates for you (update with `az containerapp update --image <new tag>`).
 You will need:
 
 - the `edspace.azurecr.io` registry credentials from your EdSpace welcome email,
-- a [MailPace](https://mailpace.com) API key (transactional email is required),
+- a [MailPace](https://mailpace.com) API key, if you want the managed app to send transactional email (the Helm and Compose paths can also use an SMTP relay, or run with email disabled — see [docs/configuration.md](docs/configuration.md#transactional-email)),
 - if enabling Azure AI: available Azure OpenAI GlobalStandard quota in the AI region you pick.
 
 What gets deployed into your resource group:
@@ -54,7 +54,7 @@ After deployment succeeds:
      --command 'bin/edspace rpc "Edspace.Accounts.AdminReconcilerWorker.enqueue()"'
    ```
 
-   Then sign in at `appUrl` with that email (magic link — this is why MailPace must work). Full onboarding details: [CLIENT_GUIDE.md](CLIENT_GUIDE.md#manual-user-creation).
+   Then sign in at `appUrl` with that email. The managed app sends the magic link through MailPace, so this is the step that proves your MailPace key works. Full onboarding details: [CLIENT_GUIDE.md](CLIENT_GUIDE.md#manual-user-creation).
 3. To update later: `az containerapp update -n edspace -g <resource-group> --image edspace.azurecr.io/edspace/edspace:<new tag>`.
 
 Prefer the CLI over the portal? See "Deploy from the CLI" in
@@ -99,7 +99,7 @@ and explicit secrets before production — see [docs/install-kubernetes.md](docs
 cd compose
 cp .env.example .env
 ../scripts/generate-secrets.sh >> .env   # fills SECRET_KEY_BASE, POSTGRES_PASSWORD etc.
-$EDITOR .env                              # set PHX_HOST, EDSPACE_IMAGE_TAG, LLM + MailPace keys
+$EDITOR .env                              # set PHX_HOST, EDSPACE_IMAGE_TAG, LLM key, MAILER_*
 docker compose up -d
 ```
 

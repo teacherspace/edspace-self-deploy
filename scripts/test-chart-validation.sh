@@ -44,6 +44,38 @@ expect_fail "missing database password" "${VALID[@]}" --set-string db.password=
 expect_fail "missing LLM credential" "${VALID[@]}" --set-string llm.apiKey=
 expect_fail "missing MailPace credential" "${VALID[@]}" --set-string mailer.mailpaceApiKey=
 expect_fail "missing verified mail sender" "${VALID[@]}" --set-string mailer.fromEmail=
+
+# Transactional email is optional (app docs/email.md): `none` must install with
+# no credential and no sender, while `smtp` moves the credential requirement
+# onto the relay rather than dropping it.
+NO_MAIL=(
+  --set-string app.host=edspace.example.org
+  --set-string db.host=postgres.internal
+  --set-string db.password=ci-db-password
+  --set-string llm.provider=openai
+  --set-string llm.apiKey=ci-llm-key
+  --set-string mailer.adapter=none
+)
+SMTP=(
+  --set-string app.host=edspace.example.org
+  --set-string db.host=postgres.internal
+  --set-string db.password=ci-db-password
+  --set-string llm.provider=openai
+  --set-string llm.apiKey=ci-llm-key
+  --set-string mailer.adapter=smtp
+  --set-string mailer.fromEmail=noreply@example.org
+  --set-string mailer.smtp.relay=smtp.example.org
+  --set-string mailer.smtp.password=ci-smtp-password
+)
+expect_pass "email disabled without any mailer credential" "${NO_MAIL[@]}"
+expect_pass "SMTP relay install" "${SMTP[@]}"
+expect_pass "SMTP relay with a customer-managed password Secret" "${SMTP[@]}" \
+  --set-string mailer.smtp.password= --set-string mailer.existingSecret=my-mailer
+expect_fail "SMTP without a relay host" "${SMTP[@]}" --set-string mailer.smtp.relay=
+expect_fail "SMTP without a verified sender" "${SMTP[@]}" --set-string mailer.fromEmail=
+expect_fail "unknown mailer adapter" "${VALID[@]}" --set-string mailer.adapter=sendgrid
+expect_fail "development-only local adapter" "${VALID[@]}" --set-string mailer.adapter=local
+expect_fail "invalid SMTP TLS mode" "${SMTP[@]}" --set-string mailer.smtp.tls=maybe
 expect_fail "unknown structured value" "${VALID[@]}" --set-string llm.apKey=typo
 expect_fail "unknown root value" "${VALID[@]}" --set typo=true
 expect_fail "unknown probe value" "${VALID[@]}" --set probes.liveness.periodSecond=10

@@ -242,12 +242,28 @@
             }
           },
           {
+            "name": "mailerAdapter",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Transactional email",
+            "defaultValue": "MailPace",
+            "toolTip": "EdSpace only emails about getting into an account: magic-link sign-in, password reset and invitations. Choose 'No email' if your users all sign in through SSO — the app then offers a password form, and invitation links are shown to the inviting admin to pass on.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "MailPace", "value": "mailpace" },
+                { "label": "SMTP relay", "value": "smtp" },
+                { "label": "No email (SSO / password sign-in only)", "value": "none" }
+              ],
+              "required": true
+            }
+          },
+          {
             "name": "mailFromEmail",
             "type": "Microsoft.Common.TextBox",
             "label": "Email from address",
-            "toolTip": "Sender for transactional email; must be verified in your MailPace account.",
+            "visible": "[not(equals(steps('application').mailerAdapter, 'none'))]",
+            "toolTip": "Sender address for transactional email. It must be verified with your provider, or messages are rejected.",
             "constraints": {
-              "required": true,
+              "required": "[not(equals(steps('application').mailerAdapter, 'none'))]",
               "regex": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
               "validationMessage": "Enter a valid email address."
             }
@@ -257,6 +273,7 @@
             "type": "Microsoft.Common.TextBox",
             "label": "Email from name",
             "defaultValue": "EdSpace",
+            "visible": "[not(equals(steps('application').mailerAdapter, 'none'))]",
             "toolTip": "Display name shown as the sender of EdSpace's emails.",
             "constraints": {
               "required": false,
@@ -268,8 +285,57 @@
             "name": "mailpaceApiKey",
             "type": "Microsoft.Common.PasswordBox",
             "label": { "password": "MailPace API key", "confirmPassword": "Confirm MailPace API key" },
+            "visible": "[equals(steps('application').mailerAdapter, 'mailpace')]",
             "toolTip": "EdSpace sends transactional email through MailPace (mailpace.com).",
-            "constraints": { "required": true }
+            "constraints": { "required": "[equals(steps('application').mailerAdapter, 'mailpace')]" }
+          },
+          {
+            "name": "mailSmtpRelay",
+            "type": "Microsoft.Common.TextBox",
+            "label": "SMTP relay host",
+            "visible": "[equals(steps('application').mailerAdapter, 'smtp')]",
+            "placeholder": "smtp.myschool.example",
+            "toolTip": "Hostname of the relay. EdSpace always encrypts the session and verifies the relay's certificate.",
+            "constraints": {
+              "required": "[equals(steps('application').mailerAdapter, 'smtp')]",
+              "regex": "^$|^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$",
+              "validationMessage": "Enter a valid hostname, e.g. smtp.myschool.example."
+            }
+          },
+          {
+            "name": "mailSmtpSecurity",
+            "type": "Microsoft.Common.DropDown",
+            "label": "SMTP security",
+            "defaultValue": "STARTTLS on port 587 (recommended)",
+            "visible": "[equals(steps('application').mailerAdapter, 'smtp')]",
+            "toolTip": "This only picks how encryption starts — the session is encrypted and the certificate verified either way. Use 587 unless your relay offers only implicit TLS.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "STARTTLS on port 587 (recommended)", "value": "starttls" },
+                { "label": "Implicit TLS on port 465", "value": "implicit" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "mailSmtpUsername",
+            "type": "Microsoft.Common.TextBox",
+            "label": "SMTP username (optional)",
+            "visible": "[equals(steps('application').mailerAdapter, 'smtp')]",
+            "toolTip": "Leave empty for a relay that accepts mail without authentication. Setting it makes authentication mandatory.",
+            "constraints": {
+              "required": false,
+              "regex": "^$|^[^\\s]{1,128}$",
+              "validationMessage": "Up to 128 characters, without spaces."
+            }
+          },
+          {
+            "name": "mailSmtpPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": { "password": "SMTP password", "confirmPassword": "Confirm SMTP password" },
+            "visible": "[equals(steps('application').mailerAdapter, 'smtp')]",
+            "toolTip": "Password for the SMTP username above. Leave empty only if the relay takes no credentials.",
+            "constraints": { "required": false }
           }
         ]
       },
@@ -329,6 +395,12 @@
       "mailFromEmail": "[steps('application').mailFromEmail]",
       "mailFromName": "[steps('application').mailFromName]",
       "mailpaceApiKey": "[steps('application').mailpaceApiKey]",
+      "mailerAdapter": "[steps('application').mailerAdapter]",
+      "mailSmtpRelay": "[steps('application').mailSmtpRelay]",
+      "mailSmtpPort": "[if(equals(steps('application').mailSmtpSecurity, 'implicit'), 465, 587)]",
+      "mailSmtpSsl": "[equals(steps('application').mailSmtpSecurity, 'implicit')]",
+      "mailSmtpUsername": "[steps('application').mailSmtpUsername]",
+      "mailSmtpPassword": "[steps('application').mailSmtpPassword]",
       "registryUsername": "[steps('license').registryUsername]",
       "registryPassword": "[steps('license').registryPassword]",
       "bootstrapSecrets": true

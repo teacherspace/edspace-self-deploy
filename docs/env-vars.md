@@ -46,14 +46,34 @@ Variables marked *managed* are composed by the deployment packaging
 | `EDSPACE_LLM_API_KEY` | yes |  | yes | API key for the configured LLM provider. Effectively required — the product's core features depend on it. (The Azure-style fallbacks AZURE_OPENAI_API_KEY / AZURE_API_KEY are also honoured.) |
 | `EDSPACE_LLM_BASE_URL` | no |  |  | Provider base URL. Required for azure (your Azure OpenAI / AI Foundry endpoint); usually left empty for public providers. |
 | `EDSPACE_LLM_API_VERSION` | no |  |  | Azure OpenAI API version, when the provider is azure. |
-| `EDSPACE_LLM_TEXT_MODEL` | no | azure:gpt-5.6-sol |  | Main text model, "provider:model" form. |
+| `EDSPACE_LLM_TEXT_MODEL` | no | azure:gpt-5.6-sol |  | Main text model, "provider:model" form. Precedence: a model saved on the backoffice Platform settings page (the `platform_settings` table) overrides this variable, and also pins the matching EDSPACE_LLM_TEXT_DEPLOYMENT from the model registry so a stale deployment name cannot pair with the newly selected model. Clear the setting there to fall back to this variable. |
 | `EDSPACE_LLM_TEXT_DEPLOYMENT` | no |  |  | Azure deployment name serving the main text model (azure only). |
-| `EDSPACE_LLM_SMALL_MODEL` | no | azure:gpt-5.6-luna |  | Small/fast model for lightweight tasks, "provider:model" form. |
+| `EDSPACE_LLM_SMALL_MODEL` | no | azure:gpt-5.6-luna |  | Small/fast model for lightweight tasks, "provider:model" form. Overridden by the backoffice Platform settings page in the same way as EDSPACE_LLM_TEXT_MODEL, pinning EDSPACE_LLM_SMALL_DEPLOYMENT with it. |
 | `EDSPACE_LLM_SMALL_DEPLOYMENT` | no |  |  | Azure deployment name serving the small model (azure only). |
 | `EDSPACE_LLM_EMBEDDING_MODEL` | no | azure:text-embedding-3-small |  | Embedding model for retrieval/RAG, "provider:model" form. Must produce 1536-dimension vectors (database schema is fixed to 1536). |
 | `EDSPACE_LLM_EMBEDDING_DEPLOYMENT` | no |  |  | Azure deployment name serving the embedding model (azure only). |
 | `AZURE_OPENAI_API_KEY` | no |  | yes | Fallback alias for EDSPACE_LLM_API_KEY (azure provider). Prefer EDSPACE_LLM_API_KEY; this alias exists for Azure-conventional setups. |
 | `AZURE_OPENAI_BASE_URL` | no |  |  | Fallback alias for EDSPACE_LLM_BASE_URL (azure provider). Prefer EDSPACE_LLM_BASE_URL. |
+
+## Chat limits & admission control
+
+| Variable | Required | Default | Secret | Description |
+|---|---|---|---|---|
+| `EDSPACE_FAIR_USE_MONTHLY_TOKENS_PER_USER` | no |  |  | Contractual fair-use allowance in LLM tokens per user per month. The effective per-school budget is this times the school's active member count. Unset (the default) disables fair-use checking entirely. Measurement comes from Langfuse, so this only has an effect on a deployment with the LANGFUSE_* settings configured. |
+
+## Chat tool switches
+
+| Variable | Required | Default | Secret | Description |
+|---|---|---|---|---|
+| `EDSPACE_CHAT_TOOLS_ENABLED` | no |  |  | Master switch for all assistant chat tools. |
+| `EDSPACE_CHAT_TOOLS_WHITEBOARD_DRAW_ENABLED` | no |  |  | Lets the assistant draw on the whiteboard. |
+| `EDSPACE_CHAT_TOOLS_WHITEBOARD_EDIT_ENABLED` | no |  |  | Lets the assistant edit existing whiteboard content — it mutates the user's own drawings, so this is the switch most worth knowing about. |
+| `EDSPACE_CHAT_TOOLS_EXPORT_ENABLED` | no |  |  | Lets the assistant export a conversation (PDF export path). |
+| `EDSPACE_CHAT_TOOLS_ASSISTANT_HANDOVER_ENABLED` | no |  |  | Lets a chat hand over to a different assistant. |
+| `EDSPACE_CHAT_TOOLS_ASSISTANT_CODE_OFFER_ENABLED` | no |  |  | Lets the assistant offer an assistant share code in chat. |
+| `EDSPACE_CHAT_TOOLS_ASSISTANT_GUIDANCE_ENABLED` | no |  |  | Lets the assistant offer guidance about using assistants. |
+| `EDSPACE_CHAT_TOOLS_WORKSPACE_ENABLED` | no |  |  | Lets the assistant read and write workspace documents. |
+| `EDSPACE_CHAT_TOOLS_CREATION_ENABLED` | no |  |  | Lets the assistant drive the in-chat assistant builder. |
 
 ## Speech (Azure Cognitive Services)
 
@@ -71,9 +91,20 @@ Variables marked *managed* are composed by the deployment packaging
 
 | Variable | Required | Default | Secret | Description |
 |---|---|---|---|---|
-| `MAILER_FROM_EMAIL` | yes |  |  | From address for transactional email. Must be a sender verified in your MailPace account. |
+| `MAILER_ADAPTER` | no | mailpace |  | Transactional-email backend. "mailpace" uses the MailPace HTTP API, "smtp" any SMTP relay, "none" disables email entirely — sign-in then uses passwords and/or SSO, and invitation links are shown to the inviting admin to pass on by hand. The app also accepts "local" (Swoosh's in-memory /dev/mailbox), which is refused in production and therefore not offered here. One of: `mailpace`, `smtp`, `none`. |
+| `MAILER_FROM_EMAIL` | conditional |  |  | From address for transactional email. Must be a sender address verified with the provider — MailPace rejects every message otherwise, and most relays refuse the envelope. **Required when** MAILER_ADAPTER is "mailpace" or "smtp" (blank counts as missing and fails at boot); not read with "none". |
 | `MAILER_FROM_NAME` | no | EdSpace |  | From display name for transactional email. |
-| `MAILPACE_API_KEY` | yes |  | yes | MailPace API token. Required — the app refuses to boot in production without it. MailPace is currently the only supported email provider (see docs/limitations.md). |
+| `MAILPACE_API_KEY` | conditional |  | yes | MailPace API token. **Required when** MAILER_ADAPTER=mailpace (the default). |
+| `MAILER_SMTP_RELAY` | conditional |  |  | SMTP relay hostname. Configured explicitly, so no MX lookup is done on it. **Required when** MAILER_ADAPTER=smtp. |
+| `MAILER_SMTP_PORT` | no | 587 |  | SMTP relay port. 587 is the STARTTLS submission port; use 465 together with MAILER_SMTP_SSL=true for implicit TLS. |
+| `MAILER_SMTP_USERNAME` | no |  |  | SMTP username. Setting it flips MAILER_SMTP_AUTH to "always" — a relay given credentials is expected to use them. |
+| `MAILER_SMTP_PASSWORD` | conditional |  | yes | SMTP password for MAILER_SMTP_USERNAME. **Required when** the relay authenticates (i.e. MAILER_SMTP_USERNAME is set). |
+| `MAILER_SMTP_SSL` | no | false |  | Implicit TLS from the first byte, usually on port 465. Leave false for the ordinary STARTTLS submission port. |
+| `MAILER_SMTP_TLS` | no | always |  | STARTTLS policy. Mandatory by default: with "if_available" a relay that does not advertise STARTTLS — or anyone in the middle stripping the capability — gets the session in cleartext, credentials and sign-in links included. Set "never" only for a relay on a trusted network. The default flips to "never" when MAILER_SMTP_SSL=true, where the session is already encrypted and STARTTLS is never offered. One of: `always`, `never`, `if_available`. |
+| `MAILER_SMTP_AUTH` | no | if_available |  | SMTP authentication policy. Defaults to "always" when MAILER_SMTP_USERNAME is set and "if_available" when it is not. One of: `always`, `never`, `if_available`. |
+| `MAILER_SMTP_TLS_VERIFY` | no | true |  | Verify the relay's TLS certificate against the OS trust store. Setting it false disables verification entirely — only safe for a relay you control on a trusted network, never across the public internet. |
+| `MAILER_SMTP_CACERTFILE` | no |  |  | Path to a PEM CA bundle to verify the relay against, for an internal CA or an image without an OS trust store. Boot fails if the path does not exist. |
+| `MAILER_SMTP_NO_MX_LOOKUPS` | no | true |  | Skip the MX lookup on MAILER_SMTP_RELAY. Set false only if you really pointed it at a domain rather than a host. |
 
 ## Authentication / OIDC
 
@@ -89,7 +120,7 @@ Variables marked *managed* are composed by the deployment packaging
 | `MICROSOFT_CLIENT_ID` | no |  |  | Microsoft Entra ID application (client) id. Leave empty to disable Microsoft sign-in. |
 | `MICROSOFT_CLIENT_SECRET` | no |  | yes | Microsoft Entra ID client secret. |
 | `MICROSOFT_REDIRECT_URI` | no |  |  | Microsoft OIDC redirect URI (https://<PHX_HOST>/auth/microsoft/callback). |
-| `MICROSOFT_BASE_URL` | no |  |  | Microsoft identity platform base URL override. |
+| `MICROSOFT_BASE_URL` | no |  |  | Microsoft identity platform base URL. Unset, the app derives "https://login.microsoftonline.com/<MICROSOFT_TENANT_ID>/v2.0" from MICROSOFT_TENANT_ID; set this only for a cloud whose endpoint differs (US Gov, China 21Vianet) or an internal proxy. |
 | `PRAXIS_CLIENT_ID` | no |  |  | Praxis/Egmont OIDC client id (PKCE public client). |
 | `PRAXIS_REDIRECT_URI` | no |  |  | Praxis OIDC redirect URI. |
 | `PRAXIS_BASE_URL` | no |  |  | Praxis OIDC base URL. |
@@ -97,6 +128,16 @@ Variables marked *managed* are composed by the deployment packaging
 | `PRAXIS_LICENSE_API_KEY` | no |  | yes | Praxis license service API key. |
 | `PRAXIS_PRODUCT_URL` | no |  |  | Praxis product URL used in license redirects. |
 | `DEBUG_AUTH_FAILURES` | no | false |  | Set to "true" to log detailed SSO failure reasons. WARNING - logs may then contain personal data; enable only while troubleshooting. |
+| `EDSPACE_PLATFORM_ADMINS` | conditional |  |  | Comma-separated emails granted platform-admin on reconciliation. This is the first-admin bootstrap: a fresh install has no account that can reach the backoffice, so set this and then run `bin/edspace rpc 'Edspace.Accounts.AdminReconcilerWorker.enqueue()'` inside the app container. Additive only — it never demotes an existing admin. Read at job-perform time on the serving node. **Required when** bootstrapping the first platform admin on a fresh install. |
+
+## Member retention & purge
+
+| Variable | Required | Default | Secret | Description |
+|---|---|---|---|---|
+| `MEMBER_PURGE_ENABLED` | no | true |  | Kill switch for the nightly member-purge sweep. Set "false" to stop it without a deploy — the worker then discards. Any other value (including unset) leaves the sweep ON. |
+| `MEMBER_PURGE_GLOBAL_CAP` | no | 200 |  | Most users one run may purge fleet-wide. A larger due-set refuses the whole run, because a mass expiry usually means a sync fault or a config error that an operator should look at before anything is deleted. |
+| `MEMBER_PURGE_STALE_SYNC_HOURS` | no | 26 |  | Roster-freshness window. The run refuses unless some completed roster sync finished inside it, and a school's members are held back unless that school appeared in one — deleting on a night the sync did not deliver would deny exactly the people it protects their comeback. |
+| `MEMBER_PURGE_RETENTION_NOTICE_DAYS` | no | 7 |  | Floor on every deadline, measured from when a school's retention was last changed, so lowering a retention window gives a visible notice period instead of a same-night mass deletion. |
 
 ## PDF export
 
@@ -112,7 +153,7 @@ Variables marked *managed* are composed by the deployment packaging
 | `LANGFUSE_PUBLIC_KEY` | no |  |  | Langfuse public key. LLM tracing activates only when LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY and LANGFUSE_HOST are all set; leave empty to disable tracing. |
 | `LANGFUSE_SECRET_KEY` | no |  | yes | Langfuse secret key. |
 | `LANGFUSE_HOST` | no |  |  | Langfuse host receiving OpenTelemetry traces (your own Langfuse instance). |
-| `LANGFUSE_BASE_URL` | no |  |  | Langfuse REST API base URL; defaults to LANGFUSE_HOST. |
+| `LANGFUSE_BASE_URL` | no | https://cloud.langfuse.com |  | Langfuse REST API base URL — the read/query side (prompt fetches, usage and fair-use lookups), separate from the OTLP span exporter. Falls back to LANGFUSE_HOST, so one host variable can drive both the push and pull paths, and then to Langfuse's public cloud: an install that sets LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY without either host variable sends its queries to cloud.langfuse.com. Point this at your own instance, or leave all three unset. Trace export is unaffected — it activates only when LANGFUSE_HOST is set alongside both keys. |
 | `LANGFUSE_ENVIRONMENT` | no |  |  | deployment.environment tag on emitted traces. |
 | `LANGFUSE_RELEASE` | no |  |  | service.version tag on emitted traces. |
 | `EDSPACE_OTEL_LLM_PAYLOADS` | no | raw |  | Whether prompt/completion text is included in telemetry spans. Set to "none" to strip payloads (recommended when traces leave your infrastructure). |
@@ -130,4 +171,4 @@ Variables marked *managed* are composed by the deployment packaging
 
 Set only under guidance from EdSpace support:
 
-`PHX_SERVER`; `PORT`; `DNS_CLUSTER_QUERY`; `DB_QUEUE_TARGET_MS`; `DB_QUEUE_INTERVAL_MS`; `DB_TIMEOUT_MS`; `AZURE_API_KEY`; `AZURE_BASE_URL`; `REQ_LLM_POOL_SIZE`; `REQ_LLM_POOL_COUNT`; `REQ_LLM_STRUCTURED_POOL_SIZE`; `REQ_LLM_STRUCTURED_POOL_COUNT`; `REQ_LLM_BULK_POOL_SIZE`; `REQ_LLM_BULK_POOL_COUNT`; `MAX_CONCURRENT_STREAMS`; `MAX_CONCURRENT_CREATION_SESSIONS`; `MAX_CONCURRENT_BACKGROUND_TASKS`; `HISTORY_MESSAGE_WINDOW`; `EDSPACE_CHAT_MAX_TOTAL_CACHED_CHARS`; `EDSPACE_CHAT_MAX_HISTORY_CHARS`; `CHROMIC_PDF_TIMEOUT_MS`; `CHROMIC_PDF_INIT_TIMEOUT_MS`; `CHROMIC_PDF_CHROME_EXECUTABLE`; `LANGFUSE_BASEURL`; `LANGFUSE_TIMEOUT`; `OTEL_BSP_MAX_QUEUE_SIZE`; `OTEL_BSP_SCHEDULE_DELAY_MS`; `OTEL_BSP_EXPORT_TIMEOUT_MS`; `SOCKET_DRAINER_BATCH_SIZE`; `SOCKET_DRAINER_BATCH_INTERVAL_MS`; `SOCKET_DRAINER_SHUTDOWN_MS`; `ULIMIT_NOFILE`; `ERL_FLAGS`; `ERL_MAX_PORTS`; `ERL_MAX_PROCESSES`; `RELEASE_DISTRIBUTION`; `RELEASE_NODE`; `RELEASE_COOKIE`; `DISCARD_ASSISTANT_DRAFTS`
+`PHX_SERVER`; `PORT`; `DNS_CLUSTER_QUERY`; `DB_QUEUE_TARGET_MS`; `DB_QUEUE_INTERVAL_MS`; `DB_TIMEOUT_MS`; `AZURE_API_KEY`; `AZURE_BASE_URL`; `REQ_LLM_POOL_SIZE`; `REQ_LLM_POOL_COUNT`; `REQ_LLM_STRUCTURED_POOL_SIZE`; `REQ_LLM_STRUCTURED_POOL_COUNT`; `REQ_LLM_BULK_POOL_SIZE`; `REQ_LLM_BULK_POOL_COUNT`; `MAX_CONCURRENT_STREAMS`; `MAX_CONCURRENT_CREATION_SESSIONS`; `MAX_CONCURRENT_BACKGROUND_TASKS`; `HISTORY_MESSAGE_WINDOW`; `EDSPACE_CHAT_MAX_TOTAL_CACHED_CHARS`; `EDSPACE_CHAT_MAX_HISTORY_CHARS`; `MAILER_SMTP_RETRIES`; `MEMBER_PURGE_ABANDON_AFTER_MINUTES`; `CHROMIC_PDF_TIMEOUT_MS`; `CHROMIC_PDF_INIT_TIMEOUT_MS`; `CHROMIC_PDF_CHROME_EXECUTABLE`; `LANGFUSE_BASEURL`; `LANGFUSE_TIMEOUT`; `OTEL_BSP_MAX_QUEUE_SIZE`; `OTEL_BSP_SCHEDULE_DELAY_MS`; `OTEL_BSP_EXPORT_TIMEOUT_MS`; `SOCKET_DRAINER_BATCH_SIZE`; `SOCKET_DRAINER_BATCH_INTERVAL_MS`; `SOCKET_DRAINER_SHUTDOWN_MS`; `ULIMIT_NOFILE`; `ERL_FLAGS`; `ERL_MAX_PORTS`; `ERL_MAX_PROCESSES`; `RELEASE_DISTRIBUTION`; `RELEASE_NODE`; `RELEASE_COOKIE`; `DISCARD_ASSISTANT_DRAFTS`

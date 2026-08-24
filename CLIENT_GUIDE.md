@@ -16,7 +16,7 @@ One stateless application container, horizontally scalable, in front of a Postgr
 |---|---|---|
 | **PostgreSQL** | Yes | ≥ 16.3 with the `vector` (pgvector), `citext`, and `pg_trgm` extensions. Embeddings are stored in Postgres — no separate vector database. Use managed Postgres in production; a bundled evaluation-only Postgres is available. See [docs/database.md](docs/database.md). |
 | **LLM / embedding provider** | Yes | Azure OpenAI by default; OpenAI, Anthropic, Google, Mistral, and others are supported. The embedding model must produce **1536-dimension** vectors. |
-| **Mailer (MailPace)** | Yes | Transactional email (magic links, invitations, password resets) via the MailPace HTTP API. Currently the only supported provider — the app refuses to boot without an API key ([docs/limitations.md](docs/limitations.md)). |
+| **Mailer** | Optional | Transactional email — magic links, invitations, password resets. `MAILER_ADAPTER` selects the MailPace HTTP API, any SMTP relay, or `none`. EdSpace sends nothing else, so a deployment whose users all arrive over SSO or a roster feed can run with email off; see [Mailer](#mailer) for what changes. |
 | **File storage** | Yes (pick one) | `local_disk` (persistent volume, default) or `azure_blob` (Azure Blob Storage) for uploads, chat attachments and logos. S3-compatible storage is not available yet. |
 | **Langfuse** | Optional | LLM tracing and per-user cost visibility. When configured, every LLM call is traced to a Langfuse instance you operate (or Langfuse Cloud); leave the `LANGFUSE_*` settings empty to run without tracing. |
 | **Azure Speech** | Optional | Speech-to-text / text-to-speech. Self-deploy packaging defaults speech **off**; enable it when you have an Azure Cognitive Services Speech resource. |
@@ -165,11 +165,35 @@ a long conversation with a large PDF attached will exceed a small quota outright
 
 ### Mailer
 
+EdSpace sends exactly three emails, all about getting into an account: magic-link sign-in, password reset, and invitations. There is no marketing or notification mail — which is why email is optional. Every mode validates its own settings and **fails at boot** naming the variable at fault, rather than silently dropping sign-in links.
+
 | Name | Description | Default | Required |
 |---|---|---|---|
-| `MAILPACE_API_KEY` | MailPace API token (**secret**) — the app refuses to boot without it | — | yes |
-| `MAILER_FROM_EMAIL` | From address (must be verified in MailPace) | — | yes |
+| `MAILER_ADAPTER` | `mailpace`, `smtp`, or `none` | `mailpace` | no |
+| `MAILER_FROM_EMAIL` | From address, verified with your provider | — | unless `none` |
 | `MAILER_FROM_NAME` | From display name | `EdSpace` | no |
+| `MAILPACE_API_KEY` | MailPace API token (**secret**) | — | with `mailpace` |
+| `MAILER_SMTP_RELAY` | SMTP relay hostname | — | with `smtp` |
+| `MAILER_SMTP_PORT` | Relay port; use `465` with `MAILER_SMTP_SSL=true` | `587` | no |
+| `MAILER_SMTP_USERNAME` / `MAILER_SMTP_PASSWORD` | Relay credentials (password is a **secret**) | — | if the relay authenticates |
+| `MAILER_SMTP_SSL` | Implicit TLS from the first byte | `false` | no |
+| `MAILER_SMTP_TLS` | STARTTLS policy: `always` / `never` / `if_available` | `always`\* | no |
+| `MAILER_SMTP_AUTH` | Auth policy: `always` / `never` / `if_available` | `always` when a username is set | no |
+| `MAILER_SMTP_TLS_VERIFY` | Verify the relay certificate against the OS trust store | `true` | no |
+| `MAILER_SMTP_CACERTFILE` | PEM bundle for an internal CA, or an image with no trust store | — | no |
+| `MAILER_SMTP_NO_MX_LOOKUPS` | Skip the MX lookup on the relay host | `true` | no |
+
+\* Flips to `never` under `MAILER_SMTP_SSL=true`, where the session is already encrypted and STARTTLS is never offered.
+
+**SMTP defaults are the strict ones.** STARTTLS is mandatory rather than opportunistic, because a relay that does not advertise it — or anyone in the middle stripping the capability — would otherwise get your credentials and sign-in links in cleartext. The relay's certificate is verified, which gen_smtp does not do on its own. Relax either only for a relay you control on a network you trust.
+
+**Running with `MAILER_ADAPTER=none`.** Nothing is queued and nothing is sent. `/sign-in` offers a password form alongside any SSO buttons, `/onboarding` asks an invitee to set a password as well as a name, and each invitation's single-use link (valid 7 days) is shown to the inviting admin to pass on by hand. The trade-off: there is no self-service password recovery — a user who forgets their password needs a platform admin to set a new one from the backoffice (**Users → the user → Set password**), a staff-only action. Configuring an OIDC provider avoids that entirely.
+
+Ask a running node what it resolved — it reports the adapter and whether a credential is set, never the credential itself:
+
+```sh
+bin/edspace eval "Edspace.Mailer.summary() |> IO.inspect()"
+```
 
 ### Langfuse (optional)
 
@@ -204,6 +228,8 @@ Tracing activates only when all three of `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET
 | `UNILOGIN_CLIENT_ID` / `UNILOGIN_CLIENT_SECRET` / `UNILOGIN_REDIRECT_URI` | UniLogin (Danish school SSO); empty client id disables it | — | no |
 | `PRAXIS_CLIENT_ID` / `PRAXIS_REDIRECT_URI` / `PRAXIS_BASE_URL` + license service vars | Praxis/Egmont sign-in and licensing | — | no |
 
+Publisher-brokered integrations that EdSpace configures during onboarding (`ALICE_*` for STIL roster sync, `ALINEA_*` for Alinea sign-in) are not part of the customer-facing contract, so they are not accepted under `env:`/`envSecret:` in the Helm chart. Supply them through `extraEnv` / `extraEnvFrom` — EdSpace provides the values and the exact shape.
+
 Redirect URIs follow `https://<PHX_HOST>/auth/<provider>/callback`.
 
 ### Other
@@ -225,9 +251,10 @@ There is **no self-service signup**: every account is provisioned first (SCIM, r
 
 - **Microsoft Entra ID** — OIDC sign-in (`MICROSOFT_*` vars). Accounts provisioned over SCIM are matched by their Entra object id.
 - **UniLogin** — the Danish education federation's OIDC broker (`UNILOGIN_*` vars), including publisher-brokered variants (Praxis).
-- **Email magic link** — passwordless sign-in for manually invited users; requires only the mailer.
+- **Email magic link** — passwordless sign-in for manually invited users; requires a configured mailer.
+- **Password** — offered on the public sign-in page only when `MAILER_ADAPTER=none`, since magic links are unavailable in that mode. (A password login also exists at `/internal-login` for demo/internal accounts regardless of the mailer setting.)
 
-Users managed by an identity provider are locked to it: an account provisioned via SCIM must use Microsoft sign-in, and a roster-synced account must use its UniLogin broker — magic links and password resets are refused for them, so a compromised mailbox cannot bypass the school's IdP. A password login also exists at `/internal-login` for demo/internal accounts only; staff set those passwords, and it is not offered on the public sign-in page.
+Users managed by an identity provider are locked to it: an account provisioned via SCIM must use Microsoft sign-in, and a roster-synced account must use its UniLogin broker — magic links and password resets are refused for them, so a compromised mailbox cannot bypass the school's IdP. With a mailer configured, the public sign-in page offers SSO and magic links only; `/internal-login` covers demo/internal accounts, whose passwords staff set.
 
 ### User Sync
 
@@ -259,7 +286,7 @@ Schools, users, and invitations are managed in the **backoffice UI** by platform
 bin/edspace rpc 'Edspace.Accounts.AdminReconcilerWorker.enqueue()'
 ```
 
-This is additive only (it never demotes existing admins).
+This is additive only (it never demotes existing admins). Sign in with that email afterwards — by magic link if a mailer is configured, by password if you run with `MAILER_ADAPTER=none` (the first sign-in then goes through the onboarding link).
 
 ## Monitoring
 

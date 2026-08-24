@@ -53,9 +53,28 @@ enable it, set `env.EDSPACE_SPEECH_ENABLED: "true"`,
 `envSecret.AZURE_SPEECH_KEY`, and `env.AZURE_SPEECH_REGION` (or supply those
 last two through `extraEnv`/`extraEnvFrom`).
 
+## Transactional email
+
+EdSpace sends exactly three messages, all about getting into an account: magic-link sign-in, password reset, and invitations. There is no marketing or notification mail, which is why email is **optional**.
+
+`mailer.adapter` picks the backend. Every mode validates its own inputs and **raises at boot** with the offending variable named — a silently misconfigured mailer drops sign-in links, which is the one failure worth refusing to defer.
+
+- `mailpace` (default): set `mailer.mailpaceApiKey` (or `mailer.existingSecret`, default key `mailpace-api-key`) and a `mailer.fromEmail` on a MailPace-verified domain.
+- `smtp`: set `mailer.smtp.relay` and `mailer.fromEmail`. The password goes in `mailer.smtp.password` or `mailer.existingSecret` (default key `smtp-password`). Defaults are the safe ones — port 587 with **mandatory** STARTTLS and certificate verification against the OS trust store, authentication required once `mailer.smtp.username` is set, and no MX lookup on a relay you named explicitly. Leave `mailer.smtp.tls`/`auth` empty to keep those defaults; setting them overrides. For implicit TLS use `ssl: true` with `port: 465`.
+  - If the relay's certificate will not verify, boot fails naming the three ways out: install CA certificates in the image, point `mailer.smtp.caCertFile` at a PEM bundle for an internal CA, or set `mailer.smtp.tlsVerify: false` for a self-signed relay on a network you trust.
+- `none`: nothing is queued and nothing is sent. `/sign-in` offers a password form alongside any SSO buttons, `/onboarding` asks an invitee to set a password as well as a name, and an invitation's single-use link is shown to the inviting admin to pass on by hand. Read the consequences in [limitations.md](limitations.md) before choosing it — there is no self-service password recovery in this mode.
+
+Ask a running node what it resolved — it reports the adapter and whether a credential is set, never the credential itself:
+
+```sh
+bin/edspace eval "Edspace.Mailer.summary() |> IO.inspect()"
+```
+
 ## SSO / OIDC
 
 UniLogin, Microsoft Entra ID and Praxis are all optional and configured via passthrough vars (`UNILOGIN_*`, `MICROSOFT_*`, `PRAXIS_*`). Redirect URIs are `https://<app.host>/auth/<provider>/callback`.
+
+**First admin.** A fresh install has no account that can reach the backoffice. Set `env.EDSPACE_PLATFORM_ADMINS` to a comma-separated list of admin emails, then run `bin/edspace rpc 'Edspace.Accounts.AdminReconcilerWorker.enqueue()'` in the app container. It is additive — it never demotes an existing admin. With `mailer.adapter: none` those admins sign in with a password rather than a magic link.
 
 ## LLM tracing (Langfuse)
 
