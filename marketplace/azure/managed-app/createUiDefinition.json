@@ -340,6 +340,70 @@
         ]
       },
       {
+        "name": "signin",
+        "label": "Sign-in",
+        "elements": [
+          {
+            "name": "enableMicrosoftSso",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Microsoft Entra ID sign-in",
+            "defaultValue": "Off",
+            "toolTip": "Adds a 'Sign in with Microsoft' button. Users are matched to EdSpace accounts by email (or by Entra object id when provisioned over SCIM). Can also be enabled later with 'az containerapp update'.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Off", "value": false },
+                { "label": "On (Entra ID / OIDC)", "value": true }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "registrationInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": "[steps('signin').enableMicrosoftSso]",
+            "options": {
+              "icon": "Info",
+              "text": "[concat('In Entra admin center create an App registration (Web platform) and a client secret. Register the redirect URI ', if(empty(steps('application').customDomain), 'https://<generated host>/auth/microsoft/callback — the generated host is shown as the microsoftRedirectUri deployment output once this deployment finishes; add it to the app registration then', concat('https://', steps('application').customDomain, '/auth/microsoft/callback')), '. Under Token configuration add the optional \"email\" claim and grant the openid, profile and email permissions.')]",
+              "uri": "https://learn.microsoft.com/entra/identity-platform/quickstart-register-app"
+            }
+          },
+          {
+            "name": "microsoftTenantId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Directory (tenant) ID",
+            "visible": "[steps('signin').enableMicrosoftSso]",
+            "placeholder": "00000000-0000-0000-0000-000000000000",
+            "toolTip": "Your Entra tenant's Directory (tenant) ID, from the app registration's Overview page — only accounts in this tenant can sign in. Enter 'organizations' to accept any work or school account (multi-tenant registration required).",
+            "constraints": {
+              "required": "[steps('signin').enableMicrosoftSso]",
+              "regex": "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$|^organizations$",
+              "validationMessage": "Enter the tenant GUID, or 'organizations'."
+            }
+          },
+          {
+            "name": "microsoftClientId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Application (client) ID",
+            "visible": "[steps('signin').enableMicrosoftSso]",
+            "placeholder": "00000000-0000-0000-0000-000000000000",
+            "toolTip": "The Application (client) ID from the app registration's Overview page.",
+            "constraints": {
+              "required": "[steps('signin').enableMicrosoftSso]",
+              "regex": "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+              "validationMessage": "Enter the application (client) ID GUID."
+            }
+          },
+          {
+            "name": "microsoftClientSecret",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": { "password": "Client secret", "confirmPassword": "Confirm client secret" },
+            "visible": "[steps('signin').enableMicrosoftSso]",
+            "toolTip": "The secret's Value (not its Secret ID) from Certificates & secrets. It is stored in the instance Key Vault. Note the expiry you chose — rotate it before then with 'az containerapp secret set'.",
+            "constraints": { "required": "[steps('signin').enableMicrosoftSso]" }
+          }
+        ]
+      },
+      {
         "name": "license",
         "label": "EdSpace license",
         "elements": [
@@ -401,6 +465,10 @@
       "mailSmtpSsl": "[equals(steps('application').mailSmtpSecurity, 'implicit')]",
       "mailSmtpUsername": "[steps('application').mailSmtpUsername]",
       "mailSmtpPassword": "[steps('application').mailSmtpPassword]",
+      "enableMicrosoftSso": "[steps('signin').enableMicrosoftSso]",
+      "microsoftTenantId": "[if(steps('signin').enableMicrosoftSso, steps('signin').microsoftTenantId, '')]",
+      "microsoftClientId": "[if(steps('signin').enableMicrosoftSso, steps('signin').microsoftClientId, '')]",
+      "microsoftClientSecret": "[if(steps('signin').enableMicrosoftSso, steps('signin').microsoftClientSecret, '')]",
       "registryUsername": "[steps('license').registryUsername]",
       "registryPassword": "[steps('license').registryPassword]",
       "bootstrapSecrets": true

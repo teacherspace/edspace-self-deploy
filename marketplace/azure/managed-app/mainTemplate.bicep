@@ -163,6 +163,23 @@ param mailSmtpUsername string = ''
 @description('SMTP password for the username above.')
 param mailSmtpPassword string = ''
 
+// -------------------------------------------------------------------- sign-in
+// Microsoft Entra ID single sign-on. Off by default: the app boots without any
+// SSO provider and users sign in by magic link / password. Other providers
+// (UniLogin, Praxis) stay CLI-only via the contract's MICROSOFT_/UNILOGIN_ vars.
+@description('Offer "Sign in with Microsoft" (Entra ID, OIDC). Requires an app registration in your tenant whose redirect URI is https://<app host>/auth/microsoft/callback.')
+param enableMicrosoftSso bool = false
+
+@description('Entra tenant to accept sign-ins from: your Directory (tenant) ID, or "organizations" for any work/school account. "common" additionally admits personal Microsoft accounts. Read only when Microsoft SSO is enabled.')
+param microsoftTenantId string = ''
+
+@description('Application (client) ID of the Entra app registration. Required when Microsoft SSO is enabled.')
+param microsoftClientId string = ''
+
+@secure()
+@description('Client secret of the Entra app registration. Required when Microsoft SSO is enabled.')
+param microsoftClientSecret string = ''
+
 // ------------------------------------------------------------------- license
 @description('Container registry host serving the EdSpace image. Leave at the default unless EdSpace support directs otherwise.')
 param registryServer string = 'edspace.azurecr.io'
@@ -454,6 +471,16 @@ resource smtpPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if 
   properties: { value: mailerAdapter == 'smtp' && !empty(mailSmtpPassword) ? mailSmtpPassword : 'unused-mailer-adapter-${mailerAdapter}' }
 }
 
+// Same always-created / placeholder-when-disabled pattern as the mailer
+// credentials. Under enableMicrosoftSso the raw value goes in, so a CLI
+// deployment that enabled SSO but forgot the secret fails here on Key Vault's
+// empty-value rejection instead of installing a sign-in button that 400s.
+resource microsoftClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
+  parent: keyVault
+  name: 'microsoft-client-secret'
+  properties: { value: enableMicrosoftSso ? microsoftClientSecret : 'unused-microsoft-sso-disabled' }
+}
+
 resource registryPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'registry-password'
@@ -515,6 +542,7 @@ module app 'modules/containerApp.bicep' = {
     tokenSigningSecret: keyVault.getSecret('token-signing-secret')
     mailpaceApiKey: mailerAdapter == 'mailpace' ? keyVault.getSecret('mailpace-api-key') : ''
     mailSmtpPassword: mailerAdapter == 'smtp' && !empty(mailSmtpPassword) ? keyVault.getSecret('smtp-password') : ''
+    microsoftClientSecret: enableMicrosoftSso ? keyVault.getSecret('microsoft-client-secret') : ''
     llmApiKeyFromKv: keyVault.getSecret('llm-api-key')
     // BCP422: lazy if() — listKeys only evaluates when enableAzureAi is true,
     // so the conditional resource is guaranteed to exist at call time.
@@ -555,6 +583,12 @@ module app 'modules/containerApp.bicep' = {
     mailSmtpPort: mailSmtpPort
     mailSmtpSsl: mailSmtpSsl
     mailSmtpUsername: mailSmtpUsername
+
+    enableMicrosoftSso: enableMicrosoftSso
+    // The app itself defaults to "common"; an explicit fallback here keeps the
+    // CLI path from emitting an empty MICROSOFT_TENANT_ID.
+    microsoftTenantId: empty(microsoftTenantId) ? 'common' : microsoftTenantId
+    microsoftClientId: microsoftClientId
   }
   dependsOn: [
     secretKeyBaseSecret
@@ -562,6 +596,7 @@ module app 'modules/containerApp.bicep' = {
     pgAdminPasswordSecret
     mailpaceApiKeySecret
     smtpPasswordSecret
+    microsoftClientSecretSecret
     registryPasswordSecret
     llmApiKeySecret
     aiModelDeployments
@@ -576,3 +611,6 @@ output postgresFqdn string = postgres.outputs.fqdn
 output storageAccountName string = storage.name
 output keyVaultName string = keyVault.name
 output aiAccountName string = enableAzureAi ? aiAccountName : ''
+// Always emitted so a customer enabling SSO later knows the exact URI to
+// register; MICROSOFT_REDIRECT_URI in the app is set from the same expression.
+output microsoftRedirectUri string = 'https://${app.outputs.fqdn}/auth/microsoft/callback'

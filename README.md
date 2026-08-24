@@ -32,6 +32,7 @@ You will need:
 - the `edspace.azurecr.io` registry credentials from your EdSpace welcome email,
 - a [MailPace](https://mailpace.com) API key, if you want the managed app to send transactional email (the Helm and Compose paths can also use an SMTP relay, or run with email disabled — see [docs/configuration.md](docs/configuration.md#transactional-email)),
 - if enabling Azure AI: available Azure OpenAI GlobalStandard quota in the AI region you pick.
+- if enabling Microsoft sign-in: an Entra app registration (tenant ID, client ID, client secret) — the form's *Sign-in* step explains the redirect URI to register; details in [marketplace/azure/managed-app/README.md](marketplace/azure/managed-app/README.md#deploy-from-the-cli-self-managed).
 
 What gets deployed into your resource group:
 
@@ -55,7 +56,8 @@ After deployment succeeds:
    ```
 
    Then sign in at `appUrl` with that email. The managed app sends the magic link through MailPace, so this is the step that proves your MailPace key works. Full onboarding details: [CLIENT_GUIDE.md](CLIENT_GUIDE.md#manual-user-creation).
-3. To update later: `az containerapp update -n edspace -g <resource-group> --image edspace.azurecr.io/edspace/edspace:<new tag>`.
+3. If you enabled Microsoft sign-in without a custom domain, copy the `microsoftRedirectUri` output into the Entra app registration's redirect URIs now — the button will not work until it matches.
+4. To update later: `az containerapp update -n edspace -g <resource-group> --image edspace.azurecr.io/edspace/edspace:<new tag>`.
 
 Prefer the CLI over the portal? See "Deploy from the CLI" in
 [`marketplace/azure/managed-app/README.md`](marketplace/azure/managed-app/README.md),

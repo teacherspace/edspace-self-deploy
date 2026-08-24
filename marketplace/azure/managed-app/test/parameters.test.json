@@ -13,6 +13,10 @@
     "registryUsername": { "value": "test-customer" },
     "registryPassword": { "value": "test-dummy-registry-token" },
     "containerImage": { "value": "edspace.azurecr.io/edspace/edspace:v0.0.0-test" },
+    "enableMicrosoftSso": { "value": true },
+    "microsoftTenantId": { "value": "organizations" },
+    "microsoftClientId": { "value": "00000000-0000-0000-0000-000000000000" },
+    "microsoftClientSecret": { "value": "test-dummy-entra-client-secret" },
     "bootstrapSecrets": { "value": true }
   }
 }

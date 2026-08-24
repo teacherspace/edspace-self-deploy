@@ -44,6 +44,38 @@ az deployment group create -g rg-edspace \
 A missing credential fails the deployment (Key Vault rejects the empty value)
 rather than installing an app that cannot send.
 
+**Microsoft Entra ID sign-in.** Off by default. To enable it, first create an
+app registration in your tenant (Entra admin center → App registrations → New):
+
+1. Platform **Web**, redirect URI `https://<app host>/auth/microsoft/callback`.
+   With a `customDomain` the host is known up front; otherwise deploy first,
+   read the `microsoftRedirectUri` output, and add it to the registration.
+2. **Certificates & secrets** → new client secret; copy its *Value*.
+3. **Token configuration** → add the optional `email` claim; **API
+   permissions** → `openid`, `profile`, `email` (Microsoft Graph, delegated).
+
+Then pass `enableMicrosoftSso: true`, `microsoftTenantId` (your Directory
+(tenant) ID, or `organizations` for any work/school account),
+`microsoftClientId` and `microsoftClientSecret`. The template composes
+`MICROSOFT_REDIRECT_URI` from the app host itself. An enabled SSO with an empty
+secret fails the deployment the same way a missing mailer credential does.
+
+Enabling it on an existing instance without redeploying the template:
+
+```sh
+az containerapp secret set -n edspace -g rg-edspace \
+  --secrets microsoft-client-secret=<value>
+az containerapp update -n edspace -g rg-edspace --set-env-vars \
+  MICROSOFT_TENANT_ID=<tenant-id> MICROSOFT_CLIENT_ID=<client-id> \
+  MICROSOFT_CLIENT_SECRET=secretref:microsoft-client-secret \
+  MICROSOFT_REDIRECT_URI=https://<app host>/auth/microsoft/callback
+```
+
+A later `az deployment group create` with `enableMicrosoftSso=false` would
+strip those vars again, so also record the choice in your parameters file.
+Rotate the secret before its Entra expiry with the same `secret set` command
+(the running revision picks it up on the next restart).
+
 Fresh installs use the default `bootstrapSecrets=true`. Infra changes to an
 **existing** instance must add `-p bootstrapSecrets=false` — see the secret
 model below; forgetting it rotates every generated secret.
@@ -87,8 +119,8 @@ will be authorized on the test definition; it rejects missing/zero values.
   admin password from `newGuid()` parameter defaults and persists them —
   along with the user-supplied mailer credential, registry token, and BYO LLM
   key — into the instance Key Vault (`kv-eds-<suffix>`).
-- Both `mailpace-api-key` and `smtp-password` are always created, holding a
-  `unused-mailer-adapter-…` placeholder for whichever adapter was not chosen:
+- `mailpace-api-key`, `smtp-password` and `microsoft-client-secret` are always
+  created, holding an `unused-…` placeholder when their feature is not chosen:
   `getSecret()` cannot sit behind a conditional at a module call site, and Key
   Vault rejects an empty value. The container app binds only the one its
   adapter uses.

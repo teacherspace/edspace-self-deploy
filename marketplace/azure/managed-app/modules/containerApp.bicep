@@ -42,6 +42,8 @@ param tokenSigningSecret string
 param mailpaceApiKey string
 @secure()
 param mailSmtpPassword string = ''
+@secure()
+param microsoftClientSecret string = ''
 // getSecret() cannot sit inside a ternary at the call site, so both sources
 // arrive and the selection happens here.
 @secure()
@@ -92,6 +94,14 @@ param mailSmtpPort int = 587
 param mailSmtpSsl bool = false
 param mailSmtpUsername string = ''
 
+// --- Microsoft Entra ID SSO (plain) ---
+// MICROSOFT_CLIENT_ID empty means "provider off" to the app, so every
+// MICROSOFT_* var is emitted only when SSO is enabled: a half-set provider
+// would render a sign-in button whose callback can never succeed.
+param enableMicrosoftSso bool = false
+param microsoftTenantId string = 'common'
+param microsoftClientId string = ''
+
 var sizes = {
   standard: { cpu: '1.0', memory: '2Gi' }
   large: { cpu: '2.0', memory: '4Gi' }
@@ -121,6 +131,7 @@ var mailerSecrets = concat(
 var secrets = concat(
   baseSecrets,
   mailerSecrets,
+  enableMicrosoftSso && !empty(microsoftClientSecret) ? [{ name: 'microsoft-client-secret', value: microsoftClientSecret }] : [],
   empty(speechKey) ? [] : [{ name: 'azure-speech-key', value: speechKey }]
 )
 
@@ -172,7 +183,16 @@ var conditionalEnv = concat(
     { name: 'MAILER_SMTP_SSL', value: mailSmtpSsl ? 'true' : 'false' }
   ] : [],
   mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? [{ name: 'MAILER_SMTP_USERNAME', value: mailSmtpUsername }] : [],
-  mailerAdapter == 'smtp' && !empty(mailSmtpPassword) ? [{ name: 'MAILER_SMTP_PASSWORD', secretRef: 'smtp-password' }] : []
+  mailerAdapter == 'smtp' && !empty(mailSmtpPassword) ? [{ name: 'MAILER_SMTP_PASSWORD', secretRef: 'smtp-password' }] : [],
+  // Redirect URI is derived from PHX_HOST rather than asked for: it must match
+  // the app registration byte-for-byte, and the host is the one thing the
+  // customer cannot know before the environment exists.
+  enableMicrosoftSso ? [
+    { name: 'MICROSOFT_TENANT_ID', value: microsoftTenantId }
+    { name: 'MICROSOFT_CLIENT_ID', value: microsoftClientId }
+    { name: 'MICROSOFT_REDIRECT_URI', value: 'https://${phxHost}/auth/microsoft/callback' }
+    { name: 'MICROSOFT_CLIENT_SECRET', secretRef: 'microsoft-client-secret' }
+  ] : []
 )
 
 resource app 'Microsoft.App/containerApps@2025-01-01' = {
