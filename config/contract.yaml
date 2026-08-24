@@ -41,8 +41,6 @@ categories:
     title: LLM connection pools
   - id: chat-limits
     title: Chat limits & admission control
-  - id: chat-tools
-    title: Chat tool switches
   - id: speech
     title: Speech (Azure Cognitive Services)
   - id: mailer
@@ -98,6 +96,32 @@ excluded:
     reason: Test-suite only.
   - name: TEST_DB_POOL_SIZE
     reason: Test-suite only.
+  # Settings below are runtime-editable on the backoffice Platform settings
+  # page (the platform_settings singleton row), which is the supported way to
+  # change them — no restart, applies to every node, and the backoffice shows
+  # the effective value. The env vars still exist in the app as
+  # deployment-time defaults underneath the DB row, but they are deliberately
+  # not part of the customer contract.
+  - prefix: EDSPACE_CHAT_TOOLS_
+    reason: >-
+      Chat tool rollout switches. Managed at runtime on the backoffice
+      Platform settings page; a save applies on the next message with no
+      restart, which is the whole point of a kill switch.
+  - name: EDSPACE_FAIR_USE_MONTHLY_TOKENS_PER_USER
+    reason: >-
+      Contractual fair-use allowance. Managed on the backoffice Platform
+      settings page — it changes when contracts change, not when
+      deployments do.
+  - name: MEMBER_PURGE_GLOBAL_CAP
+    reason: >-
+      Member-purge safeguard, managed on the backoffice Platform settings
+      page next to the purge-run reports it should be tuned against.
+  - name: MEMBER_PURGE_STALE_SYNC_HOURS
+    reason: Member-purge safeguard, managed on the Platform settings page.
+  - name: MEMBER_PURGE_RETENTION_NOTICE_DAYS
+    reason: Member-purge safeguard, managed on the Platform settings page.
+  - name: MEMBER_PURGE_ABANDON_AFTER_MINUTES
+    reason: Member-purge safeguard, managed on the Platform settings page.
 
 vars:
   # ---------------------------------------------------------------- phoenix
@@ -592,108 +616,6 @@ vars:
     tier: internal
     source: user
 
-  - name: EDSPACE_FAIR_USE_MONTHLY_TOKENS_PER_USER
-    category: chat-limits
-    description: >-
-      Contractual fair-use allowance in LLM tokens per user per month. The
-      effective per-school budget is this times the school's active member
-      count. Unset (the default) disables fair-use checking entirely.
-      Measurement comes from Langfuse, so this only has an effect on a
-      deployment with the LANGFUSE_* settings configured.
-    type: integer
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  # ------------------------------------------------------------- chat-tools
-  # Per-tool rollout switches, so a misbehaving chat tool can be pulled
-  # WITHOUT a redeploy. Each is read only when actually set — leaving one
-  # unset keeps the application's own compiled-in default, which is why none
-  # of them carries a default here.
-  - name: EDSPACE_CHAT_TOOLS_ENABLED
-    category: chat-tools
-    description: Master switch for all assistant chat tools.
-    type: boolean
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_CHAT_TOOLS_WHITEBOARD_DRAW_ENABLED
-    category: chat-tools
-    description: Lets the assistant draw on the whiteboard.
-    type: boolean
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_CHAT_TOOLS_WHITEBOARD_EDIT_ENABLED
-    category: chat-tools
-    description: >-
-      Lets the assistant edit existing whiteboard content — it mutates the
-      user's own drawings, so this is the switch most worth knowing about.
-    type: boolean
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_CHAT_TOOLS_EXPORT_ENABLED
-    category: chat-tools
-    description: Lets the assistant export a conversation (PDF export path).
-    type: boolean
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_CHAT_TOOLS_ASSISTANT_HANDOVER_ENABLED
-    category: chat-tools
-    description: Lets a chat hand over to a different assistant.
-    type: boolean
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_CHAT_TOOLS_ASSISTANT_CODE_OFFER_ENABLED
-    category: chat-tools
-    description: Lets the assistant offer an assistant share code in chat.
-    type: boolean
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_CHAT_TOOLS_ASSISTANT_GUIDANCE_ENABLED
-    category: chat-tools
-    description: Lets the assistant offer guidance about using assistants.
-    type: boolean
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_CHAT_TOOLS_WORKSPACE_ENABLED
-    category: chat-tools
-    description: Lets the assistant read and write workspace documents.
-    type: boolean
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_CHAT_TOOLS_CREATION_ENABLED
-    category: chat-tools
-    description: Lets the assistant drive the in-chat assistant builder.
-    type: boolean
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
   # ----------------------------------------------------------------- speech
   - name: EDSPACE_SPEECH_ENABLED
     category: speech
@@ -1152,74 +1074,24 @@ vars:
     example: admin@school.example,head@school.example
 
   # ------------------------------------------------------------- retention
-  # Safeguards on the nightly member-purge sweep, which deletes users whose
-  # school retention window has expired. Every knob guards an IRREVERSIBLE
-  # operation and defaults to the cautious side; leave them alone unless you
-  # have reviewed a run. Only in effect on a deployment with the roster
-  # integration configured.
+  # The nightly member-purge sweep and its tuning knobs are managed at
+  # runtime on the backoffice Platform settings page (see `excluded:`). Only
+  # the kill switch stays in the contract, as deployment-side break-glass:
+  # stopping an irreversible deletion must not depend on the app's own DB
+  # write path being healthy.
   - name: MEMBER_PURGE_ENABLED
     category: retention
     description: >-
-      Kill switch for the nightly member-purge sweep. Set "false" to stop it
-      without a deploy — the worker then discards. Any other value (including
-      unset) leaves the sweep ON.
+      Deployment-side kill switch for the nightly member-purge sweep. Set
+      "false" to stop it without a deploy — the worker then discards. The
+      sweep runs only when neither this variable nor the backoffice Platform
+      settings toggle disables it; a kill switch thrown in either place wins,
+      and the backoffice cannot re-enable a sweep this variable disabled.
     type: boolean
     default: { app: true }
     required: false
     secret: false
     tier: advanced
-    source: user
-
-  - name: MEMBER_PURGE_GLOBAL_CAP
-    category: retention
-    description: >-
-      Most users one run may purge fleet-wide. A larger due-set refuses the
-      whole run, because a mass expiry usually means a sync fault or a config
-      error that an operator should look at before anything is deleted.
-    type: integer
-    default: { app: 200 }
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: MEMBER_PURGE_STALE_SYNC_HOURS
-    category: retention
-    description: >-
-      Roster-freshness window. The run refuses unless some completed roster
-      sync finished inside it, and a school's members are held back unless
-      that school appeared in one — deleting on a night the sync did not
-      deliver would deny exactly the people it protects their comeback.
-    type: integer
-    default: { app: 26 }
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: MEMBER_PURGE_RETENTION_NOTICE_DAYS
-    category: retention
-    description: >-
-      Floor on every deadline, measured from when a school's retention was
-      last changed, so lowering a retention window gives a visible notice
-      period instead of a same-night mass deletion.
-    type: integer
-    default: { app: 7 }
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: MEMBER_PURGE_ABANDON_AFTER_MINUTES
-    category: retention
-    description: >-
-      How stale an in-progress purge run must be before the next run may
-      reclaim its single-active slot.
-    type: integer
-    default: { app: 360 }
-    required: false
-    secret: false
-    tier: internal
     source: user
 
   # -------------------------------------------------------------------- pdf

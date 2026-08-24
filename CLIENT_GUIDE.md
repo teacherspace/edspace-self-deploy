@@ -245,6 +245,10 @@ A further set of internal tuning variables (pool/timeout/BEAM settings, listed a
 
 ## Operation
 
+### Platform settings (in-app)
+
+Product-behavior settings are **not** environment variables: a platform admin manages them on the backoffice **Platform settings** page, where a save applies to every node within moments, without a restart. That page controls the default AI models, the assistant chat-tool switches (including per-tool kill switches), the fair-use token allowance, and the member-purge safeguards, and shows each setting's currently effective value and where it comes from. A value saved there overrides the deployment's environment; clearing it falls back again. The one exception is the purge kill switch, where env (`MEMBER_PURGE_ENABLED`) and the page each independently stop the sweep — see [docs/configuration.md](docs/configuration.md#runtime-platform-settings-not-env-vars).
+
 ### User Authentication
 
 There is **no self-service signup**: every account is provisioned first (SCIM, roster sync, or manually) and users then sign in with one of:

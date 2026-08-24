@@ -18,6 +18,19 @@ Both maps are validated against the generated `values.schema.json`: unknown vari
 
 For customer-managed secret machinery (External Secrets Operator, CSI driver), mount your own ConfigMaps/Secrets with `extraEnvFrom`, or raw `env` entries with `extraEnv`.
 
+## Runtime platform settings (not env vars)
+
+Not everything is deployment configuration. Product-behavior settings live on the backoffice **Platform settings** page (platform-admin only) and are stored in the database, so changing one needs no restart and applies to every node within moments:
+
+- **Default AI models** — the platform-wide text and small models.
+- **Assistant chat tools** — the master switch and per-tool kill switches (whiteboard drawing/editing, conversation export, assistant handover, share-code recognition, guidance, workspace awareness, builder tools).
+- **Fair use** — the monthly LLM token allowance per user.
+- **Member retention & purge** — the safeguards on the nightly purge sweep (global cap, roster-freshness window, notice floor, stale-run reclaim).
+
+Each setting's precedence is *Platform settings page > deployment env var > compiled default*, and the page shows the currently effective value with its provenance. One deliberate exception: the member-purge sweep runs only when **neither** `MEMBER_PURGE_ENABLED` (env, still contracted as break-glass) **nor** the page's toggle disables it — a kill switch on an irreversible deletion works from wherever it was thrown.
+
+The underlying env vars for these settings exist in the app but are outside the customer contract (see `excluded:` in `config/contract.yaml`); prefer the page. First set-up of the admin account that can reach the page is `EDSPACE_PLATFORM_ADMINS` — see [SSO / OIDC](#sso--oidc).
+
 ## Database (three modes)
 
 1. **Chart-known password** — `db.host/port/database/username` + `db.password` (or `db.bundled.enabled=true`). The chart composes `DATABASE_URL` into its Secret, URL-encoding the password.

@@ -55,26 +55,6 @@ Variables marked *managed* are composed by the deployment packaging
 | `AZURE_OPENAI_API_KEY` | no |  | yes | Fallback alias for EDSPACE_LLM_API_KEY (azure provider). Prefer EDSPACE_LLM_API_KEY; this alias exists for Azure-conventional setups. |
 | `AZURE_OPENAI_BASE_URL` | no |  |  | Fallback alias for EDSPACE_LLM_BASE_URL (azure provider). Prefer EDSPACE_LLM_BASE_URL. |
 
-## Chat limits & admission control
-
-| Variable | Required | Default | Secret | Description |
-|---|---|---|---|---|
-| `EDSPACE_FAIR_USE_MONTHLY_TOKENS_PER_USER` | no |  |  | Contractual fair-use allowance in LLM tokens per user per month. The effective per-school budget is this times the school's active member count. Unset (the default) disables fair-use checking entirely. Measurement comes from Langfuse, so this only has an effect on a deployment with the LANGFUSE_* settings configured. |
-
-## Chat tool switches
-
-| Variable | Required | Default | Secret | Description |
-|---|---|---|---|---|
-| `EDSPACE_CHAT_TOOLS_ENABLED` | no |  |  | Master switch for all assistant chat tools. |
-| `EDSPACE_CHAT_TOOLS_WHITEBOARD_DRAW_ENABLED` | no |  |  | Lets the assistant draw on the whiteboard. |
-| `EDSPACE_CHAT_TOOLS_WHITEBOARD_EDIT_ENABLED` | no |  |  | Lets the assistant edit existing whiteboard content — it mutates the user's own drawings, so this is the switch most worth knowing about. |
-| `EDSPACE_CHAT_TOOLS_EXPORT_ENABLED` | no |  |  | Lets the assistant export a conversation (PDF export path). |
-| `EDSPACE_CHAT_TOOLS_ASSISTANT_HANDOVER_ENABLED` | no |  |  | Lets a chat hand over to a different assistant. |
-| `EDSPACE_CHAT_TOOLS_ASSISTANT_CODE_OFFER_ENABLED` | no |  |  | Lets the assistant offer an assistant share code in chat. |
-| `EDSPACE_CHAT_TOOLS_ASSISTANT_GUIDANCE_ENABLED` | no |  |  | Lets the assistant offer guidance about using assistants. |
-| `EDSPACE_CHAT_TOOLS_WORKSPACE_ENABLED` | no |  |  | Lets the assistant read and write workspace documents. |
-| `EDSPACE_CHAT_TOOLS_CREATION_ENABLED` | no |  |  | Lets the assistant drive the in-chat assistant builder. |
-
 ## Speech (Azure Cognitive Services)
 
 | Variable | Required | Default | Secret | Description |
@@ -134,10 +114,7 @@ Variables marked *managed* are composed by the deployment packaging
 
 | Variable | Required | Default | Secret | Description |
 |---|---|---|---|---|
-| `MEMBER_PURGE_ENABLED` | no | true |  | Kill switch for the nightly member-purge sweep. Set "false" to stop it without a deploy — the worker then discards. Any other value (including unset) leaves the sweep ON. |
-| `MEMBER_PURGE_GLOBAL_CAP` | no | 200 |  | Most users one run may purge fleet-wide. A larger due-set refuses the whole run, because a mass expiry usually means a sync fault or a config error that an operator should look at before anything is deleted. |
-| `MEMBER_PURGE_STALE_SYNC_HOURS` | no | 26 |  | Roster-freshness window. The run refuses unless some completed roster sync finished inside it, and a school's members are held back unless that school appeared in one — deleting on a night the sync did not deliver would deny exactly the people it protects their comeback. |
-| `MEMBER_PURGE_RETENTION_NOTICE_DAYS` | no | 7 |  | Floor on every deadline, measured from when a school's retention was last changed, so lowering a retention window gives a visible notice period instead of a same-night mass deletion. |
+| `MEMBER_PURGE_ENABLED` | no | true |  | Deployment-side kill switch for the nightly member-purge sweep. Set "false" to stop it without a deploy — the worker then discards. The sweep runs only when neither this variable nor the backoffice Platform settings toggle disables it; a kill switch thrown in either place wins, and the backoffice cannot re-enable a sweep this variable disabled. |
 
 ## PDF export
 
@@ -171,4 +148,4 @@ Variables marked *managed* are composed by the deployment packaging
 
 Set only under guidance from EdSpace support:
 
-`PHX_SERVER`; `PORT`; `DNS_CLUSTER_QUERY`; `DB_QUEUE_TARGET_MS`; `DB_QUEUE_INTERVAL_MS`; `DB_TIMEOUT_MS`; `AZURE_API_KEY`; `AZURE_BASE_URL`; `REQ_LLM_POOL_SIZE`; `REQ_LLM_POOL_COUNT`; `REQ_LLM_STRUCTURED_POOL_SIZE`; `REQ_LLM_STRUCTURED_POOL_COUNT`; `REQ_LLM_BULK_POOL_SIZE`; `REQ_LLM_BULK_POOL_COUNT`; `MAX_CONCURRENT_STREAMS`; `MAX_CONCURRENT_CREATION_SESSIONS`; `MAX_CONCURRENT_BACKGROUND_TASKS`; `HISTORY_MESSAGE_WINDOW`; `EDSPACE_CHAT_MAX_TOTAL_CACHED_CHARS`; `EDSPACE_CHAT_MAX_HISTORY_CHARS`; `MAILER_SMTP_RETRIES`; `MEMBER_PURGE_ABANDON_AFTER_MINUTES`; `CHROMIC_PDF_TIMEOUT_MS`; `CHROMIC_PDF_INIT_TIMEOUT_MS`; `CHROMIC_PDF_CHROME_EXECUTABLE`; `LANGFUSE_BASEURL`; `LANGFUSE_TIMEOUT`; `OTEL_BSP_MAX_QUEUE_SIZE`; `OTEL_BSP_SCHEDULE_DELAY_MS`; `OTEL_BSP_EXPORT_TIMEOUT_MS`; `SOCKET_DRAINER_BATCH_SIZE`; `SOCKET_DRAINER_BATCH_INTERVAL_MS`; `SOCKET_DRAINER_SHUTDOWN_MS`; `ULIMIT_NOFILE`; `ERL_FLAGS`; `ERL_MAX_PORTS`; `ERL_MAX_PROCESSES`; `RELEASE_DISTRIBUTION`; `RELEASE_NODE`; `RELEASE_COOKIE`; `DISCARD_ASSISTANT_DRAFTS`
+`PHX_SERVER`; `PORT`; `DNS_CLUSTER_QUERY`; `DB_QUEUE_TARGET_MS`; `DB_QUEUE_INTERVAL_MS`; `DB_TIMEOUT_MS`; `AZURE_API_KEY`; `AZURE_BASE_URL`; `REQ_LLM_POOL_SIZE`; `REQ_LLM_POOL_COUNT`; `REQ_LLM_STRUCTURED_POOL_SIZE`; `REQ_LLM_STRUCTURED_POOL_COUNT`; `REQ_LLM_BULK_POOL_SIZE`; `REQ_LLM_BULK_POOL_COUNT`; `MAX_CONCURRENT_STREAMS`; `MAX_CONCURRENT_CREATION_SESSIONS`; `MAX_CONCURRENT_BACKGROUND_TASKS`; `HISTORY_MESSAGE_WINDOW`; `EDSPACE_CHAT_MAX_TOTAL_CACHED_CHARS`; `EDSPACE_CHAT_MAX_HISTORY_CHARS`; `MAILER_SMTP_RETRIES`; `CHROMIC_PDF_TIMEOUT_MS`; `CHROMIC_PDF_INIT_TIMEOUT_MS`; `CHROMIC_PDF_CHROME_EXECUTABLE`; `LANGFUSE_BASEURL`; `LANGFUSE_TIMEOUT`; `OTEL_BSP_MAX_QUEUE_SIZE`; `OTEL_BSP_SCHEDULE_DELAY_MS`; `OTEL_BSP_EXPORT_TIMEOUT_MS`; `SOCKET_DRAINER_BATCH_SIZE`; `SOCKET_DRAINER_BATCH_INTERVAL_MS`; `SOCKET_DRAINER_SHUTDOWN_MS`; `ULIMIT_NOFILE`; `ERL_FLAGS`; `ERL_MAX_PORTS`; `ERL_MAX_PROCESSES`; `RELEASE_DISTRIBUTION`; `RELEASE_NODE`; `RELEASE_COOKIE`; `DISCARD_ASSISTANT_DRAFTS`
