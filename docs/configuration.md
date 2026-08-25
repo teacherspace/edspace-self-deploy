@@ -8,7 +8,7 @@ A setting gets a **structured chart value** only when the chart has to act on it
 
 ```yaml
 env:                       # non-secret → ConfigMap
-  EDSPACE_SPEECH_VOICE: en-US-JennyNeural
+  EDSPACE_LLM_API_VERSION: "2024-10-21"
   POOL_SIZE: "40"
 envSecret:                 # secret → Secret
   UNILOGIN_CLIENT_SECRET: "..."
