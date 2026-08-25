@@ -79,6 +79,11 @@ jobs:
         run: |
           git clone --depth 1 https://github.com/Azure/arm-ttk.git $env:RUNNER_TEMP/arm-ttk
           Import-Module $env:RUNNER_TEMP/arm-ttk/arm-ttk/arm-ttk.psd1
+          # A failing test reports through Write-Error, and GitHub runs pwsh
+          # steps with $ErrorActionPreference = 'Stop' — left alone, the very
+          # first failure kills the step before the summary below can list
+          # any of them. Collect every result, then decide.
+          $ErrorActionPreference = 'Continue'
           $results = Test-AzTemplate -TemplatePath marketplace/azure/managed-app/dist -Skip 'URIs Should Be Properly Constructed'
           $failed = @($results | Where-Object { -not $_.Passed })
           $failed | ForEach-Object { Write-Host "FAIL [$($_.Group)] $($_.Name)"; $_.Errors | ForEach-Object { Write-Host "   $_" } }

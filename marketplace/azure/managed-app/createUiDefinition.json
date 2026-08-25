@@ -311,8 +311,8 @@
             "toolTip": "This only picks how encryption starts — the session is encrypted and the certificate verified either way. Use 587 unless your relay offers only implicit TLS.",
             "constraints": {
               "allowedValues": [
-                { "label": "STARTTLS on port 587 (recommended)", "value": "starttls" },
-                { "label": "Implicit TLS on port 465", "value": "implicit" }
+                { "label": "STARTTLS on port 587 (recommended)", "value": 587 },
+                { "label": "Implicit TLS on port 465", "value": 465 }
               ],
               "required": true
             }
@@ -461,8 +461,8 @@
       "mailpaceApiKey": "[steps('application').mailpaceApiKey]",
       "mailerAdapter": "[steps('application').mailerAdapter]",
       "mailSmtpRelay": "[steps('application').mailSmtpRelay]",
-      "mailSmtpPort": "[if(equals(steps('application').mailSmtpSecurity, 'implicit'), 465, 587)]",
-      "mailSmtpSsl": "[equals(steps('application').mailSmtpSecurity, 'implicit')]",
+      "mailSmtpPort": "[steps('application').mailSmtpSecurity]",
+      "mailSmtpSsl": "[equals(steps('application').mailSmtpSecurity, 465)]",
       "mailSmtpUsername": "[steps('application').mailSmtpUsername]",
       "mailSmtpPassword": "[steps('application').mailSmtpPassword]",
       "enableMicrosoftSso": "[steps('signin').enableMicrosoftSso]",
