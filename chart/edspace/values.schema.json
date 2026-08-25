@@ -1178,7 +1178,7 @@
               ]
             }
           ],
-          "description": "Deployment default for the speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; the packaging sets it to \"false\" until an Azure Speech resource is provided."
+          "description": "Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; the packaging sets it to \"false\" until an Azure Speech resource is provided."
         },
         "AZURE_SPEECH_KEY": {
           "not": {},
@@ -1345,7 +1345,7 @@
               ]
             }
           ],
-          "description": "Deployment-side kill switch for the nightly member-purge sweep. Set \"false\" to stop it without a deploy \u2014 the worker then discards. The sweep runs only when neither this variable nor the backoffice Platform settings toggle disables it; a kill switch thrown in either place wins, and the backoffice cannot re-enable a sweep this variable disabled."
+          "description": "Deployment-side kill switch for the nightly member-purge sweep. Set \"false\" to stop it without a deploy \u2014 the worker then discards, and nothing inside the application can re-enable it."
         },
         "PDF_ENABLED": {
           "anyOf": [
@@ -1940,7 +1940,7 @@
               ]
             }
           ],
-          "description": "Deployment default for the speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; the packaging sets it to \"false\" until an Azure Speech resource is provided."
+          "description": "Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; the packaging sets it to \"false\" until an Azure Speech resource is provided."
         },
         "AZURE_SPEECH_KEY": {
           "type": "string",
@@ -2107,7 +2107,7 @@
               ]
             }
           ],
-          "description": "Deployment-side kill switch for the nightly member-purge sweep. Set \"false\" to stop it without a deploy \u2014 the worker then discards. The sweep runs only when neither this variable nor the backoffice Platform settings toggle disables it; a kill switch thrown in either place wins, and the backoffice cannot re-enable a sweep this variable disabled."
+          "description": "Deployment-side kill switch for the nightly member-purge sweep. Set \"false\" to stop it without a deploy \u2014 the worker then discards, and nothing inside the application can re-enable it."
         },
         "PDF_ENABLED": {
           "anyOf": [

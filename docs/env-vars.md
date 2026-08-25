@@ -46,9 +46,9 @@ Variables marked *managed* are composed by the deployment packaging
 | `EDSPACE_LLM_API_KEY` | yes |  | yes | API key for the configured LLM provider. Effectively required — the product's core features depend on it. (The Azure-style fallbacks AZURE_OPENAI_API_KEY / AZURE_API_KEY are also honoured.) |
 | `EDSPACE_LLM_BASE_URL` | no |  |  | Provider base URL. Required for azure (your Azure OpenAI / AI Foundry endpoint); usually left empty for public providers. |
 | `EDSPACE_LLM_API_VERSION` | no |  |  | Azure OpenAI API version, when the provider is azure. |
-| `EDSPACE_LLM_TEXT_MODEL` | no | azure:gpt-5.6-sol |  | Main text model, "provider:model" form. Precedence: a model saved on the backoffice Platform settings page (the `platform_settings` table) overrides this variable, and also pins the matching EDSPACE_LLM_TEXT_DEPLOYMENT from the model registry so a stale deployment name cannot pair with the newly selected model. Clear the setting there to fall back to this variable. |
+| `EDSPACE_LLM_TEXT_MODEL` | no | azure:gpt-5.6-sol |  | Main text model, "provider:model" form. |
 | `EDSPACE_LLM_TEXT_DEPLOYMENT` | no |  |  | Azure deployment name serving the main text model (azure only). |
-| `EDSPACE_LLM_SMALL_MODEL` | no | azure:gpt-5.6-luna |  | Small/fast model for lightweight tasks, "provider:model" form. Overridden by the backoffice Platform settings page in the same way as EDSPACE_LLM_TEXT_MODEL, pinning EDSPACE_LLM_SMALL_DEPLOYMENT with it. |
+| `EDSPACE_LLM_SMALL_MODEL` | no | azure:gpt-5.6-luna |  | Small/fast model for lightweight tasks, "provider:model" form. |
 | `EDSPACE_LLM_SMALL_DEPLOYMENT` | no |  |  | Azure deployment name serving the small model (azure only). |
 | `EDSPACE_LLM_EMBEDDING_MODEL` | no | azure:text-embedding-3-small |  | Embedding model for retrieval/RAG, "provider:model" form. Must produce 1536-dimension vectors (database schema is fixed to 1536). |
 | `EDSPACE_LLM_EMBEDDING_DEPLOYMENT` | no |  |  | Azure deployment name serving the embedding model (azure only). |
@@ -59,7 +59,7 @@ Variables marked *managed* are composed by the deployment packaging
 
 | Variable | Required | Default | Secret | Description |
 |---|---|---|---|---|
-| `EDSPACE_SPEECH_ENABLED` | no | true |  | Deployment default for the speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; the packaging sets it to "false" until an Azure Speech resource is provided. A platform admin can switch speech on or off at runtime on the backoffice Platform settings page, which overrides this variable; the page also says when the credentials are missing. The voice and dictation languages are managed there only (see `excluded:`). |
+| `EDSPACE_SPEECH_ENABLED` | no | true |  | Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; the packaging sets it to "false" until an Azure Speech resource is provided. |
 | `AZURE_SPEECH_KEY` | no |  | yes | Azure Cognitive Services Speech API key. |
 | `AZURE_SPEECH_REGION` | no |  |  | Azure Speech resource region. |
 | `AZURE_SPEECH_ENDPOINT` | no |  |  | Azure Speech endpoint override. |
@@ -70,7 +70,7 @@ Variables marked *managed* are composed by the deployment packaging
 |---|---|---|---|---|
 | `MAILER_ADAPTER` | no | mailpace |  | Transactional-email backend. "mailpace" uses the MailPace HTTP API, "smtp" any SMTP relay, "none" disables email entirely — sign-in then uses passwords and/or SSO, and invitation links are shown to the inviting admin to pass on by hand. The app also accepts "local" (Swoosh's in-memory /dev/mailbox), which is refused in production and therefore not offered here. One of: `mailpace`, `smtp`, `none`. |
 | `MAILER_FROM_EMAIL` | conditional |  |  | From address for transactional email. Must be a sender address verified with the provider — MailPace rejects every message otherwise, and most relays refuse the envelope. **Required when** MAILER_ADAPTER is "mailpace" or "smtp" (blank counts as missing and fails at boot); not read with "none". |
-| `MAILER_FROM_NAME` | no | EdSpace |  | Deployment default for the From display name on transactional email. Also editable at runtime on the backoffice Platform settings page, which overrides this variable. |
+| `MAILER_FROM_NAME` | no | EdSpace |  | From display name for transactional email. |
 | `MAILPACE_API_KEY` | conditional |  | yes | MailPace API token. **Required when** MAILER_ADAPTER=mailpace (the default). |
 | `MAILER_SMTP_RELAY` | conditional |  |  | SMTP relay hostname. Configured explicitly, so no MX lookup is done on it. **Required when** MAILER_ADAPTER=smtp. |
 | `MAILER_SMTP_PORT` | no | 587 |  | SMTP relay port. 587 is the STARTTLS submission port; use 465 together with MAILER_SMTP_SSL=true for implicit TLS. |
@@ -110,7 +110,7 @@ Variables marked *managed* are composed by the deployment packaging
 
 | Variable | Required | Default | Secret | Description |
 |---|---|---|---|---|
-| `MEMBER_PURGE_ENABLED` | no | true |  | Deployment-side kill switch for the nightly member-purge sweep. Set "false" to stop it without a deploy — the worker then discards. The sweep runs only when neither this variable nor the backoffice Platform settings toggle disables it; a kill switch thrown in either place wins, and the backoffice cannot re-enable a sweep this variable disabled. |
+| `MEMBER_PURGE_ENABLED` | no | true |  | Deployment-side kill switch for the nightly member-purge sweep. Set "false" to stop it without a deploy — the worker then discards, and nothing inside the application can re-enable it. |
 
 ## PDF export
 

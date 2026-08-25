@@ -104,46 +104,31 @@ excluded:
     reason: Test-suite only.
   - name: TEST_DB_POOL_SIZE
     reason: Test-suite only.
-  # Settings below are runtime-editable on the backoffice Platform settings
-  # page (the platform_settings singleton row), which is the supported way to
-  # change them — no restart, applies to every node, and the backoffice shows
-  # the effective value. The env vars still exist in the app as
-  # deployment-time defaults underneath the DB row, but they are deliberately
-  # not part of the customer contract.
+  # Product-behaviour settings managed inside the application itself. The
+  # app still reads these as boot-time defaults, but they are not deployment
+  # configuration and are kept out of every customer surface on purpose.
   - prefix: EDSPACE_CHAT_TOOLS_
-    reason: >-
-      Chat tool rollout switches. Managed at runtime on the backoffice
-      Platform settings page; a save applies on the next message with no
-      restart, which is the whole point of a kill switch.
+    reason: In-app setting.
   - name: EDSPACE_FAIR_USE_MONTHLY_TOKENS_PER_USER
-    reason: >-
-      Contractual fair-use allowance. Managed on the backoffice Platform
-      settings page — it changes when contracts change, not when
-      deployments do.
+    reason: In-app setting.
   - name: MEMBER_PURGE_GLOBAL_CAP
-    reason: >-
-      Member-purge safeguard, managed on the backoffice Platform settings
-      page next to the purge-run reports it should be tuned against.
+    reason: In-app setting.
   - name: MEMBER_PURGE_STALE_SYNC_HOURS
-    reason: Member-purge safeguard, managed on the Platform settings page.
+    reason: In-app setting.
   - name: MEMBER_PURGE_RETENTION_NOTICE_DAYS
-    reason: Member-purge safeguard, managed on the Platform settings page.
+    reason: In-app setting.
   - name: MEMBER_PURGE_ABANDON_AFTER_MINUTES
-    reason: Member-purge safeguard, managed on the Platform settings page.
+    reason: In-app setting.
   - name: EDSPACE_SPEECH_VOICE
-    reason: >-
-      Read-aloud voice, a product preference managed on the Platform
-      settings page.
+    reason: In-app setting.
   - name: EDSPACE_SPEECH_RECOGNITION_LANGUAGE
-    reason: Dictation language, managed on the Platform settings page.
+    reason: In-app setting.
   - name: EDSPACE_SPEECH_RECOGNITION_LANGUAGES
-    reason: Dictation language menu, managed on the Platform settings page.
+    reason: In-app setting.
   - name: DEBUG_AUTH_FAILURES
     reason: >-
-      Sign-in diagnostics logging leaks personal data, so the supported way
-      to turn it on is the time-boxed window on the Platform settings page,
-      which switches itself off. The env var remains as a boot-time default
-      for EdSpace-operated staging, where it is set and unset by hand.
+      Logs personal data; enabled in-app for a time-boxed window, not by
+      deployment configuration.
 
 vars:
   # ---------------------------------------------------------------- phoenix
@@ -414,13 +399,6 @@ vars:
     secret: false
     tier: core
     source: user
-    notes: >-
-      Precedence: a model saved on the backoffice Platform settings page
-      (the `platform_settings` table) overrides this variable, and also pins
-      the matching EDSPACE_LLM_TEXT_DEPLOYMENT from the model registry so a
-      stale deployment name cannot pair with the newly selected model. Clear
-      the setting there to fall back to this variable.
-
 
   - name: EDSPACE_LLM_TEXT_DEPLOYMENT
     category: llm
@@ -441,10 +419,6 @@ vars:
     secret: false
     tier: advanced
     source: user
-    notes: >-
-      Overridden by the backoffice Platform settings page in the same way as
-      EDSPACE_LLM_TEXT_MODEL, pinning EDSPACE_LLM_SMALL_DEPLOYMENT with it.
-
 
   - name: EDSPACE_LLM_SMALL_DEPLOYMENT
     category: llm
@@ -642,20 +616,15 @@ vars:
   - name: EDSPACE_SPEECH_ENABLED
     category: speech
     description: >-
-      Deployment default for the speech features (STT/TTS). Requires the
-      AZURE_SPEECH_* settings when enabled; the packaging sets it to "false"
-      until an Azure Speech resource is provided.
+      Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings
+      when enabled; the packaging sets it to "false" until an Azure Speech
+      resource is provided.
     type: boolean
     default: { app: true, chart: false, compose: false }
     required: false
     secret: false
     tier: core
     source: user
-    notes: >-
-      A platform admin can switch speech on or off at runtime on the
-      backoffice Platform settings page, which overrides this variable; the
-      page also says when the credentials are missing. The voice and
-      dictation languages are managed there only (see `excluded:`).
 
   - name: AZURE_SPEECH_KEY
     category: speech
@@ -731,17 +700,13 @@ vars:
 
   - name: MAILER_FROM_NAME
     category: mailer
-    description: >-
-      Deployment default for the From display name on transactional email.
+    description: From display name for transactional email.
     type: string
     default: { app: EdSpace }
     required: false
     secret: false
     tier: advanced
     source: user
-    notes: >-
-      Also editable at runtime on the backoffice Platform settings page,
-      which overrides this variable.
 
   - name: MAILPACE_API_KEY
     category: mailer
@@ -1082,19 +1047,15 @@ vars:
     example: admin@school.example,head@school.example
 
   # ------------------------------------------------------------- retention
-  # The nightly member-purge sweep and its tuning knobs are managed at
-  # runtime on the backoffice Platform settings page (see `excluded:`). Only
-  # the kill switch stays in the contract, as deployment-side break-glass:
+  # Only the kill switch is deployment configuration, as break-glass:
   # stopping an irreversible deletion must not depend on the app's own DB
   # write path being healthy.
   - name: MEMBER_PURGE_ENABLED
     category: retention
     description: >-
       Deployment-side kill switch for the nightly member-purge sweep. Set
-      "false" to stop it without a deploy — the worker then discards. The
-      sweep runs only when neither this variable nor the backoffice Platform
-      settings toggle disables it; a kill switch thrown in either place wins,
-      and the backoffice cannot re-enable a sweep this variable disabled.
+      "false" to stop it without a deploy — the worker then discards, and
+      nothing inside the application can re-enable it.
     type: boolean
     default: { app: true }
     required: false

@@ -135,6 +135,11 @@ expect_fail "same key in env and envSecret" "${VALID[@]}" \
   --set-string env.LANGFUSE_ENVIRONMENT=production \
   --set-string envSecret.LANGFUSE_ENVIRONMENT=production
 expect_fail "invalid boolean env value" "${VALID[@]}" --set-string env.EDSPACE_SPEECH_ENABLED=banana
+# Settings managed inside the application are outside the contract on purpose
+# (`excluded:` in config/contract.yaml); the env/envSecret schema must not
+# quietly accept them.
+expect_fail "in-app setting supplied as env" "${VALID[@]}" --set-string env.EDSPACE_SPEECH_VOICE=da-DK-ChristelNeural
+expect_fail "in-app setting supplied as env (purge tuning)" "${VALID[@]}" --set-string env.MEMBER_PURGE_GLOBAL_CAP=100
 expect_fail "Blob storage without a key source" "${VALID[@]}" \
   --set storage.adapter=azure_blob \
   --set-string storage.azureBlob.account=stedspace \
