@@ -265,15 +265,21 @@ EDSPACE_LLM_EMBEDDING_DEPLOYMENT: {{ . | quote }}
 {{- end }}
 {{- with .Values.mailer }}
 MAILER_ADAPTER: {{ .adapter | quote }}
+{{/* Requirements per adapter live in values.schema.json, which also allows
+the variable to come from extraEnv/extraEnvFrom instead - so no `required`. */}}
 {{- if ne .adapter "none" }}
-MAILER_FROM_EMAIL: {{ required "mailer.fromEmail is required unless mailer.adapter is none" .fromEmail | quote }}
+{{- with .fromEmail }}
+MAILER_FROM_EMAIL: {{ . | quote }}
+{{- end }}
 {{- end }}
 {{- with .fromName }}
 MAILER_FROM_NAME: {{ . | quote }}
 {{- end }}
 {{- if eq .adapter "smtp" }}
 {{- with .smtp }}
-MAILER_SMTP_RELAY: {{ required "mailer.smtp.relay is required with mailer.adapter=smtp" .relay | quote }}
+{{- with .relay }}
+MAILER_SMTP_RELAY: {{ . | quote }}
+{{- end }}
 MAILER_SMTP_PORT: {{ .port | toString | quote }}
 MAILER_SMTP_SSL: {{ .ssl | toString | quote }}
 MAILER_SMTP_TLS_VERIFY: {{ .tlsVerify | toString | quote }}

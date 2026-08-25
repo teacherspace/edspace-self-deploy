@@ -126,12 +126,41 @@ will be authorized on the test definition; it rejects missing/zero values.
   along with the user-supplied mailer credential, registry token, and BYO LLM
   key — into the instance Key Vault (`kv-eds-<suffix>`).
 - `mailpace-api-key`, `smtp-password` and `microsoft-client-secret` are always
-  created, holding an `unused-…` placeholder when their feature is not chosen:
-  `getSecret()` cannot sit behind a conditional at a module call site, and Key
-  Vault rejects an empty value. The container app binds only the one its
-  adapter uses.
+  created, holding an `unused-…` placeholder when their feature is not chosen
+  (Key Vault rejects an empty value). The container app reads and binds only
+  the ones its adapter / SSO choice uses.
+- All three are created only under `bootstrapSecrets=true`, yet a redeploy
+  with `bootstrapSecrets=false` still reads whichever its features need. An
+  instance installed **before `smtp-password` / `microsoft-client-secret`
+  existed** therefore has to seed them before a redeploy that enables SMTP
+  authentication or Microsoft SSO, or the deployment fails with
+  `SecretNotFound`:
+
+  ```sh
+  az keyvault secret set --vault-name kv-eds-<suffix> -n smtp-password --value '<smtp password>'
+  az keyvault secret set --vault-name kv-eds-<suffix> -n microsoft-client-secret --value '<client secret>'
+  ```
+
+  (Pass an `unused-…` placeholder for a secret whose feature stays off.)
+- The same applies, more quietly, to a secret that **exists but still holds
+  its `unused-…` placeholder** — the state of any instance whose feature was
+  off at install. A `bootstrapSecrets=false` redeploy does not rewrite
+  secrets, so turning the feature on binds the placeholder as though it were
+  the real credential: there is no `SecretNotFound`, the deployment succeeds,
+  and SMTP authentication or the Entra token exchange then fails at runtime
+  against a plausible-looking value. **Enabling SMTP authentication or
+  Microsoft SSO on an existing instance therefore means setting the secret
+  first**, with the same `az keyvault secret set` calls above, whether or not
+  it already exists.
 - **Every consumer reads from the vault** via `getSecret()`; raw parameters
   are never used directly downstream.
+- Parameter combinations the portal form cannot produce, but a CLI or
+  parameters-file deployment can, are rejected up front by `fail()` guards in
+  `mainTemplate.bicep` (the `…Checked` variables): a missing sender, relay,
+  MailPace key, Entra client ID or client secret, and an SMTP username and
+  password supplied without each other. Guards on a credential that is written
+  into the vault are gated on `bootstrapSecrets`, since a `false` redeploy is
+  expected to leave that parameter empty.
 - A Key Vault secret PUT always writes a new version, and `newGuid()` defaults
   re-evaluate on every deployment. Therefore:
 

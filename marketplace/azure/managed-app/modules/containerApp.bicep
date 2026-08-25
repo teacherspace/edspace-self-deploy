@@ -47,8 +47,9 @@ param mailpaceApiKey string
 param mailSmtpPassword string = ''
 @secure()
 param microsoftClientSecret string = ''
-// getSecret() cannot sit inside a ternary at the call site, so both sources
-// arrive and the selection happens here.
+// The BYO key comes from the vault and the Azure AI key from listKeys() on a
+// conditional resource; both arrive and the selection happens here so the
+// secret binding below is unconditional.
 @secure()
 param llmApiKeyFromKv string
 @secure()
@@ -186,7 +187,10 @@ var conditionalEnv = concat(
     { name: 'MAILER_SMTP_SSL', value: mailSmtpSsl ? 'true' : 'false' }
   ] : [],
   mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? [{ name: 'MAILER_SMTP_USERNAME', value: mailSmtpUsername }] : [],
-  mailerAdapter == 'smtp' && !empty(mailSmtpPassword) ? [{ name: 'MAILER_SMTP_PASSWORD', secretRef: 'smtp-password' }] : [],
+  // Keyed off the username, not the password: mailSmtpPassword arrives as a
+  // Key Vault reference whenever a username is set, so !empty() on it would
+  // always be true and read as a check that is not actually happening.
+  mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? [{ name: 'MAILER_SMTP_PASSWORD', secretRef: 'smtp-password' }] : [],
   // Redirect URI is derived from PHX_HOST rather than asked for: it must match
   // the app registration byte-for-byte, and the host is the one thing the
   // customer cannot know before the environment exists.

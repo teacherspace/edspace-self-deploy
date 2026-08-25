@@ -235,6 +235,7 @@ Redirect URIs follow `https://<PHX_HOST>/auth/<provider>/callback`.
 |---|---|---|---|
 | `EDSPACE_PLATFORM_ADMINS` | Comma-separated emails granted platform-admin on reconciliation — used to bootstrap the first admin (see [Manual user creation](#manual-user-creation)) | — | first install |
 | `PDF_ENABLED` | Headless-Chromium PDF export | `true` | no |
+| `MEMBER_PURGE_ENABLED` | Break-glass kill switch for the nightly member-purge sweep; set `false` to stop it without a deploy (nothing inside the app can re-enable it) | `true` | no |
 | `CHROMIC_PDF_POOL_SIZE` | Concurrent Chromium sessions (memory cost each) | `4` | no |
 
 A further set of internal tuning variables (pool/timeout/BEAM settings, listed at the end of [docs/env-vars.md](docs/env-vars.md)) should only be changed under guidance from EdSpace support.

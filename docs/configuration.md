@@ -8,7 +8,7 @@ A setting gets a **structured chart value** only when the chart has to act on it
 
 ```yaml
 env:                       # non-secret → ConfigMap
-  EDSPACE_LLM_API_VERSION: "2024-10-21"
+  PDF_ENABLED: "false"
   POOL_SIZE: "40"
 envSecret:                 # secret → Secret
   UNILOGIN_CLIENT_SECRET: "..."
@@ -17,6 +17,8 @@ envSecret:                 # secret → Secret
 Both maps are validated against the generated `values.schema.json`: unknown variable names (typos), wrong types, and putting a secret variable in plain `env:` are all rejected at `helm lint`/install time. Variables outside the contract (e.g. a new app release ahead of the chart) go through `extraEnv`/`extraEnvFrom` instead.
 
 For customer-managed secret machinery (External Secrets Operator, CSI driver), mount your own ConfigMaps/Secrets with `extraEnvFrom`, or raw `env` entries with `extraEnv`.
+
+Both also serve as the escape hatch for a required setting that the chart cannot see — a sender address or SMTP relay sourced from your own Secret, say. The two are not checked equally: an `extraEnv` entry is matched **by variable name**, so the requirement is genuinely satisfied, while `extraEnvFrom` can only be checked for being non-empty, since nothing in the chart can look inside a referenced Secret. A release that uses `extraEnvFrom` for something unrelated therefore satisfies these requirements by accident, and a genuinely missing variable surfaces as a boot failure instead of an install-time error. Prefer `extraEnv` where the value is not itself secret, and check the pod logs first when a release using `extraEnvFrom` fails to start.
 
 ## Database (three modes)
 
@@ -60,7 +62,7 @@ EdSpace sends exactly three messages, all about getting into an account: magic-l
 `mailer.adapter` picks the backend. Every mode validates its own inputs and **raises at boot** with the offending variable named — a silently misconfigured mailer drops sign-in links, which is the one failure worth refusing to defer.
 
 - `mailpace` (default): set `mailer.mailpaceApiKey` (or `mailer.existingSecret`, default key `mailpace-api-key`) and a `mailer.fromEmail` on a MailPace-verified domain.
-- `smtp`: set `mailer.smtp.relay` and `mailer.fromEmail`. The password goes in `mailer.smtp.password` or `mailer.existingSecret` (default key `smtp-password`). Defaults are the safe ones — port 587 with **mandatory** STARTTLS and certificate verification against the OS trust store, authentication required once `mailer.smtp.username` is set, and no MX lookup on a relay you named explicitly. Leave `mailer.smtp.tls`/`auth` empty to keep those defaults; setting them overrides. For implicit TLS use `ssl: true` with `port: 465`.
+- `smtp`: set `mailer.smtp.relay` and `mailer.fromEmail`. The password goes in `mailer.smtp.password` or `mailer.existingSecret` (default key `smtp-password`). Defaults are the safe ones — port 587 with **mandatory** STARTTLS and certificate verification against the OS trust store, authentication required once `mailer.smtp.username` is set, and no MX lookup on a relay you named explicitly. Username and password are validated as a pair: a username with no password source, and a password source with no username, are both rejected at install time, because the app authenticates only when the username is present and would otherwise drop the credential in silence. For an unauthenticated relay leave both empty. Leave `mailer.smtp.tls`/`auth` empty to keep those defaults; setting them overrides. For implicit TLS use `ssl: true` with `port: 465`.
   - For an internal CA, put the PEM bundle in a Kubernetes Secret and set `mailer.smtp.caCertSecret` plus optional `caCertSecretKey` (default `ca.crt`). The chart mounts it into the app, migration, and seed pods and sets the path automatically. `mailer.smtp.caCertFile` remains available only when a custom image already contains the file. As a last resort, `mailer.smtp.tlsVerify: false` disables verification for a relay on a network you trust.
 - `none`: nothing is queued and nothing is sent. `/sign-in` offers a password form alongside any SSO buttons, `/onboarding` asks an invitee to set a password as well as a name, and an invitation's single-use link is shown to the inviting admin to pass on by hand. Read the consequences in [limitations.md](limitations.md) before choosing it — there is no self-service password recovery in this mode.
 
@@ -80,4 +82,4 @@ UniLogin, Microsoft Entra ID and Praxis are all optional and configured via pass
 
 ## LLM tracing (Langfuse)
 
-Tracing activates only when `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_HOST` are all set — point them at **your own** Langfuse instance. Set `EDSPACE_OTEL_LLM_PAYLOADS: none` if traces leave your infrastructure and must not contain prompt text.
+Tracing activates only when `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY` and `LANGFUSE_HOST` are all set — point them at **your own** Langfuse instance. `LANGFUSE_TIMEOUT` is in **seconds** (0.1–120, integer or float); earlier packaging documented it as milliseconds, so a carried-over `5000` is now rejected rather than read as a 5000-second timeout. Set `EDSPACE_OTEL_LLM_PAYLOADS: none` if traces leave your infrastructure and must not contain prompt text.

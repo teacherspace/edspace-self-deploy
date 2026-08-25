@@ -1,7 +1,7 @@
 # EdSpace — Docker Compose deployment (pilots / evaluations / small installs).
 #
 # Setup: cp .env.example .env && ../scripts/generate-secrets.sh >> .env,
-# then edit .env (PHX_HOST, EDSPACE_IMAGE_TAG, LLM + MailPace keys).
+# then edit .env (PHX_HOST, EDSPACE_IMAGE_TAG, LLM key, mailer settings).
 # See docs/install-compose.md.
 #
 # Values under `environment:` are composed by this file and override .env;

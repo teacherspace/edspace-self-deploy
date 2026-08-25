@@ -749,9 +749,19 @@ vars:
     category: mailer
     description: >-
       SMTP username. Setting it flips MAILER_SMTP_AUTH to "always" — a relay
-      given credentials is expected to use them.
+      given credentials is expected to use them. Authentication keys off this
+      variable alone, so a password without it is never used: supply both, or
+      neither for a relay that accepts unauthenticated mail.
     type: string
     required: false
+    required_when:
+      description: >-
+        MAILER_ADAPTER=smtp and MAILER_SMTP_PASSWORD is set (blank counts as
+        missing)
+      condition:
+        all:
+          - { var: MAILER_ADAPTER, equals: smtp }
+          - { var: MAILER_SMTP_PASSWORD, present: true }
     secret: false
     tier: core
     source: user
@@ -1200,9 +1210,11 @@ vars:
     category: telemetry
     description: >-
       Langfuse REST client timeout in SECONDS — integer or float, not
-      milliseconds. The effective default is 5 seconds; a value like 5000
-      would mean 5000 seconds, and a non-numeric value raises.
-    type: string
+      milliseconds (earlier packaging documented this as ms; a value like
+      5000 now means 5000 seconds, and is rejected as out of range). A
+      non-numeric value raises.
+    type: number
+    range: { min: 0.1, max: 120 }
     default: { app: 5 }
     required: false
     secret: false

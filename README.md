@@ -30,7 +30,7 @@ updates for you (update with `az containerapp update --image <new tag>`).
 You will need:
 
 - the `edspace.azurecr.io` registry credentials from your EdSpace welcome email,
-- a [MailPace](https://mailpace.com) API key, if you want the managed app to send transactional email (the Helm and Compose paths can also use an SMTP relay, or run with email disabled — see [docs/configuration.md](docs/configuration.md#transactional-email)),
+- a way to send transactional email, or the decision not to: a [MailPace](https://mailpace.com) API key (default), an SMTP relay, or *Email backend: none* — all three are offered by the form and the template alike; see [docs/configuration.md](docs/configuration.md#transactional-email) for what each mode means,
 - if enabling Azure AI: available Azure OpenAI GlobalStandard quota in the AI region you pick.
 - if enabling Microsoft sign-in: an Entra app registration (tenant ID, client ID, client secret) — the form's *Sign-in* step explains the redirect URI to register; details in [marketplace/azure/managed-app/README.md](marketplace/azure/managed-app/README.md#deploy-from-the-cli-self-managed).
 

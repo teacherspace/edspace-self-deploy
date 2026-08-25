@@ -37,7 +37,7 @@ OUT_CONDITIONAL_REQUIREMENTS = ROOT / "config" / "conditional-requirements.json"
 
 TIERS = {"core", "advanced", "internal"}
 SOURCES = {"user", "computed", "fixed"}
-TYPES = {"string", "integer", "boolean", "enum"}
+TYPES = {"string", "integer", "number", "boolean", "enum"}
 
 # Computed/fixed vars must actually be produced by the packaging layers;
 # this table is asserted so the contract can't silently promise a var
@@ -216,6 +216,19 @@ def load_contract() -> tuple[list[dict], list[dict]]:
             errors.append(f"{name}: type must be one of {sorted(TYPES)}")
         if (v.get("type") == "enum") != bool(v.get("enum")):
             errors.append(f"{name}: `enum` list required iff type is enum")
+        rng = v.get("range")
+        if rng is not None:
+            if v.get("type") not in ("integer", "number"):
+                errors.append(f"{name}: range applies only to integer/number")
+            elif not (
+                isinstance(rng, dict)
+                and rng
+                and set(rng) <= {"min", "max"}
+                and all(isinstance(b, (int, float)) and not isinstance(b, bool) for b in rng.values())
+            ):
+                errors.append(f"{name}: range must be a {{min,max}} map of numbers")
+            elif rng.get("min") is not None and rng.get("max") is not None and rng["min"] > rng["max"]:
+                errors.append(f"{name}: range min is above max")
         if not isinstance(v.get("secret"), bool):
             errors.append(f"{name}: secret must be a bool")
         if not v.get("description"):
@@ -364,14 +377,39 @@ def gen_env_example(categories: list[dict], variables: list[dict]) -> str:
 
 
 # ---------------------------------------------------------- values.schema.json
+def numeric_pattern(v: dict) -> str:
+    """Regex for the string spelling of a numeric value, narrowed by `range`.
+
+    JSON Schema's minimum/maximum only bind the number form, so a quoted
+    "5000" would slip past a range that the bare 5000 fails. The digit count
+    is the part of a bound a regex can express: it does not reproduce the
+    bound exactly (max 300 still admits "999"), but it does reject a value
+    off by an order of magnitude -- the mistake a unit change actually
+    produces.
+    """
+    rng = v.get("range") or {}
+    digits = "[0-9]+"
+    if rng.get("max") is not None:
+        digits = "[0-9]{1,%d}" % len(str(int(rng["max"])))
+    sign = "" if (rng.get("min") is not None and rng["min"] >= 0) else "-?"
+    fraction = "(\\.[0-9]+)?" if v["type"] == "number" else ""
+    return f"^{sign}{digits}{fraction}$"
+
+
 def json_type_for(v: dict) -> dict:
     # Env values arrive as strings in YAML but users may write bare ints/bools;
     # accept the logical type or its string form.
-    if v["type"] == "integer":
+    if v["type"] in ("integer", "number"):
+        numeric: dict = {"type": "integer" if v["type"] == "integer" else "number"}
+        rng = v.get("range") or {}
+        if rng.get("min") is not None:
+            numeric["minimum"] = rng["min"]
+        if rng.get("max") is not None:
+            numeric["maximum"] = rng["max"]
         schema: dict = {
             "anyOf": [
-                {"type": "integer"},
-                {"type": "string", "pattern": "^-?[0-9]+$"},
+                numeric,
+                {"type": "string", "pattern": numeric_pattern(v)},
             ]
         }
     elif v["type"] == "boolean":

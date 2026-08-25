@@ -19,6 +19,21 @@ REQUIREMENTS_PATH = ROOT / "config" / "conditional-requirements.json"
 CONTAINER_BICEP_PATH = (
     ROOT / "marketplace" / "azure" / "managed-app" / "modules" / "containerApp.bicep"
 )
+COMPILED_PATH = ROOT / "marketplace" / "azure" / "managed-app" / "azuredeploy.json"
+
+# Guards that reject a parameter combination the portal form cannot produce but
+# a CLI or parameters-file deployment can. Each must survive compilation AND be
+# read by something downstream: an unreferenced fail() variable is never
+# evaluated by ARM, so a guard that loses its last consumer stops guarding
+# without any visible change to the template.
+EXPECTED_GUARDS = {
+    "mailFromEmailChecked",
+    "mailSmtpRelayChecked",
+    "mailSmtpUsernameChecked",
+    "mailpaceApiKeyChecked",
+    "microsoftClientIdChecked",
+    "microsoftClientSecretChecked",
+}
 
 
 def ui_elements() -> dict[str, dict]:
@@ -42,6 +57,7 @@ def assert_equal(actual: object, expected: object, label: str) -> None:
 AZURE_FIELDS = {
     "MAILER_ADAPTER": "steps('application').mailerAdapter",
     "MAILER_SMTP_USERNAME": "steps('application').mailSmtpUsername",
+    "MAILER_SMTP_PASSWORD": "steps('application').mailSmtpPassword",
 }
 
 
@@ -62,6 +78,38 @@ def azure_condition(condition: dict) -> str:
     raise AssertionError(f"unsupported Azure condition: {condition!r}")
 
 
+def check_parameter_guards() -> None:
+    template = json.loads(COMPILED_PATH.read_text())
+    variables = template.get("variables") or {}
+
+    guards = {name for name, expr in variables.items() if "fail(" in json.dumps(expr)}
+    missing = EXPECTED_GUARDS - guards
+    if missing:
+        raise AssertionError(f"compiled template lost fail() guards: {sorted(missing)}")
+    extra = guards - EXPECTED_GUARDS
+    if extra:
+        raise AssertionError(
+            f"undeclared fail() guards: {sorted(extra)} - add them to EXPECTED_GUARDS"
+        )
+
+    # Reachability: the guard has to appear somewhere other than its own
+    # definition, or ARM never evaluates it.
+    for guard in sorted(EXPECTED_GUARDS):
+        consumers = json.dumps(
+            {
+                "resources": template.get("resources"),
+                "outputs": template.get("outputs"),
+                "variables": {k: v for k, v in variables.items() if k != guard},
+            }
+        )
+        if f"variables('{guard}')" not in consumers:
+            raise AssertionError(
+                f"{guard} is never read, so its fail() can never fire"
+            )
+
+    print("ok - Azure parameter guards compile and stay reachable")
+
+
 def main() -> None:
     elements = ui_elements()
     requirements = json.loads(REQUIREMENTS_PATH.read_text())["requirements"]
@@ -70,6 +118,9 @@ def main() -> None:
         "MAILPACE_API_KEY": "mailpaceApiKey",
         "MAILER_SMTP_RELAY": "mailSmtpRelay",
         "MAILER_SMTP_PASSWORD": "mailSmtpPassword",
+        # Both halves of the SMTP credential pair carry a requirement, each
+        # conditioned on the other, so neither can be supplied alone.
+        "MAILER_SMTP_USERNAME": "mailSmtpUsername",
     }
 
     for variable, element_name in contract_to_ui.items():
@@ -91,8 +142,11 @@ def main() -> None:
 
     bicep = BICEP_PATH.read_text() + "\n" + CONTAINER_BICEP_PATH.read_text()
     fragments = {
-        "authenticated SMTP fails before app creation when its password is blank":
-            "mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? mailSmtpPassword",
+        # Reading the *Checked* variable is what makes the username/password
+        # pairing guard reachable; against the raw parameter the vault would
+        # simply take a blank value and fail with an opaque ARM BadRequest.
+        "authenticated SMTP writes its password through the pairing guard":
+            "mailerAdapter == 'smtp' && !empty(mailSmtpUsernameChecked) ? mailSmtpPassword",
         "authenticated SMTP loads the password Secret":
             "mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? keyVault.getSecret('smtp-password') : ''",
         "disabled Entra emits no provider configuration":
@@ -117,6 +171,7 @@ def main() -> None:
             raise AssertionError(f"{label}: missing Bicep fragment {fragment!r}")
 
     print("ok - Azure conditional requirements match the deployment contract")
+    check_parameter_guards()
 
 
 if __name__ == "__main__":
