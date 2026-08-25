@@ -52,10 +52,14 @@ After deployment succeeds:
    az containerapp update -n edspace -g <resource-group> \
      --set-env-vars "EDSPACE_PLATFORM_ADMINS=admin@your-school.example"
    az containerapp exec -n edspace -g <resource-group> \
-     --command 'bin/edspace rpc "Edspace.Accounts.AdminReconcilerWorker.enqueue()"'
+     --command 'bin/edspace rpc "Edspace.Accounts.AdminReconciler.bootstrap() |> IO.inspect(pretty: true)"'
    ```
 
-   Then sign in at `appUrl` with that email. The managed app sends the magic link through MailPace, so this is the step that proves your MailPace key works. Full onboarding details: [CLIENT_GUIDE.md](CLIENT_GUIDE.md#manual-user-creation).
+   Then sign in at `appUrl` with that email. With MailPace or SMTP configured,
+   enter the address on `/sign-in` to request a magic link. With **No email**,
+   copy the returned `onboarding_links` URL over a trusted channel; it is valid
+   for seven days and asks the admin to set a password. Full onboarding details:
+   [CLIENT_GUIDE.md](CLIENT_GUIDE.md#manual-user-creation).
 3. If you enabled Microsoft sign-in without a custom domain, copy the `microsoftRedirectUri` output into the Entra app registration's redirect URIs now — the button will not work until it matches.
 4. To update later: `az containerapp update -n edspace -g <resource-group> --image edspace.azurecr.io/edspace/edspace:<new tag>`.
 

@@ -423,6 +423,15 @@
             "tlsVerify": {
               "type": "boolean"
             },
+            "caCertSecret": {
+              "type": "string",
+              "description": "Existing Secret containing a PEM CA bundle for the SMTP relay. Mounted read-only at /etc/edspace/mailer-ca/ca.crt."
+            },
+            "caCertSecretKey": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Key in caCertSecret containing the PEM bundle."
+            },
             "caCertFile": {
               "type": "string"
             },
@@ -1321,7 +1330,7 @@
         },
         "EDSPACE_PLATFORM_ADMINS": {
           "type": "string",
-          "description": "Comma-separated emails granted platform-admin on reconciliation. This is the first-admin bootstrap: a fresh install has no account that can reach the backoffice, so set this and then run `bin/edspace rpc 'Edspace.Accounts.AdminReconcilerWorker.enqueue()'` inside the app container. Additive only \u2014 it never demotes an existing admin. Read at job-perform time on the serving node."
+          "description": "Comma-separated emails granted platform-admin on reconciliation. This is the first-admin bootstrap: a fresh install has no account that can reach the backoffice, so set this and then run `bin/edspace rpc 'Edspace.Accounts.AdminReconciler.bootstrap() |> IO.inspect(pretty: true)'` inside the app container. With email disabled, the result contains onboarding links to hand over securely. Additive only \u2014 it never demotes an existing admin. Read on the serving node."
         },
         "MEMBER_PURGE_ENABLED": {
           "anyOf": [
@@ -2083,7 +2092,7 @@
         },
         "EDSPACE_PLATFORM_ADMINS": {
           "type": "string",
-          "description": "Comma-separated emails granted platform-admin on reconciliation. This is the first-admin bootstrap: a fresh install has no account that can reach the backoffice, so set this and then run `bin/edspace rpc 'Edspace.Accounts.AdminReconcilerWorker.enqueue()'` inside the app container. Additive only \u2014 it never demotes an existing admin. Read at job-perform time on the serving node."
+          "description": "Comma-separated emails granted platform-admin on reconciliation. This is the first-admin bootstrap: a fresh install has no account that can reach the backoffice, so set this and then run `bin/edspace rpc 'Edspace.Accounts.AdminReconciler.bootstrap() |> IO.inspect(pretty: true)'` inside the app container. With email disabled, the result contains onboarding links to hand over securely. Additive only \u2014 it never demotes an existing admin. Read on the serving node."
         },
         "MEMBER_PURGE_ENABLED": {
           "anyOf": [
@@ -2938,6 +2947,90 @@
                   "properties": {
                     "name": {
                       "const": "MAILER_SMTP_RELAY"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$comment": "An SMTP username enables mandatory authentication and therefore needs a password source.",
+      "if": {
+        "properties": {
+          "mailer": {
+            "properties": {
+              "adapter": {
+                "const": "smtp"
+              },
+              "smtp": {
+                "properties": {
+                  "username": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "username"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "smtp": {
+                    "properties": {
+                      "password": {
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "password"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "existingSecret": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "existingSecret"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "extraEnvFrom": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "extraEnv": {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "const": "MAILER_SMTP_PASSWORD"
                     }
                   },
                   "required": [

@@ -199,6 +199,15 @@
             "tls": { "enum": ["", "always", "never", "if_available"] },
             "auth": { "enum": ["", "always", "never", "if_available"] },
             "tlsVerify": { "type": "boolean" },
+            "caCertSecret": {
+              "type": "string",
+              "description": "Existing Secret containing a PEM CA bundle for the SMTP relay. Mounted read-only at /etc/edspace/mailer-ca/ca.crt."
+            },
+            "caCertSecretKey": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Key in caCertSecret containing the PEM bundle."
+            },
             "caCertFile": { "type": "string" },
             "noMxLookups": { "type": "boolean" }
           },
@@ -676,6 +685,58 @@
                 "contains": {
                   "type": "object",
                   "properties": { "name": { "const": "MAILER_SMTP_RELAY" } },
+                  "required": ["name"]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$comment": "An SMTP username enables mandatory authentication and therefore needs a password source.",
+      "if": {
+        "properties": {
+          "mailer": {
+            "properties": {
+              "adapter": { "const": "smtp" },
+              "smtp": {
+                "properties": { "username": { "minLength": 1 } },
+                "required": ["username"]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "smtp": {
+                    "properties": { "password": { "minLength": 1 } },
+                    "required": ["password"]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "mailer": {
+                "properties": { "existingSecret": { "minLength": 1 } },
+                "required": ["existingSecret"]
+              }
+            }
+          },
+          { "properties": { "extraEnvFrom": { "minItems": 1 } } },
+          {
+            "properties": {
+              "extraEnv": {
+                "contains": {
+                  "type": "object",
+                  "properties": { "name": { "const": "MAILER_SMTP_PASSWORD" } },
                   "required": ["name"]
                 }
               }

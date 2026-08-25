@@ -283,10 +283,10 @@ Schools, users, and invitations are managed in the **backoffice UI** by platform
 **First admin bootstrap** — on a fresh install no admin exists yet, so no one can log into the backoffice. Set `EDSPACE_PLATFORM_ADMINS` to a comma-separated list of admin emails in the deployment environment, then run inside the app container:
 
 ```sh
-bin/edspace rpc 'Edspace.Accounts.AdminReconcilerWorker.enqueue()'
+bin/edspace rpc 'Edspace.Accounts.AdminReconciler.bootstrap() |> IO.inspect(pretty: true)'
 ```
 
-This is additive only (it never demotes existing admins). Sign in with that email afterwards — by magic link if a mailer is configured, by password if you run with `MAILER_ADAPTER=none` (the first sign-in then goes through the onboarding link).
+This is additive only (it never demotes existing admins). With a mailer, enter that email on `/sign-in` to request a magic link. With `MAILER_ADAPTER=none`, copy the URL returned under `onboarding_links` over a trusted channel; it remains valid for seven days and asks the admin to set a first password.
 
 ## Monitoring
 

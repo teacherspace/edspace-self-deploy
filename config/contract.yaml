@@ -5,15 +5,18 @@
 #   - compose/.env.example
 #   - chart/edspace/values.schema.json (env/envSecret passthrough validation)
 #   - docs/env-vars.md
+#   - config/conditional-requirements.json (packaging requirement predicates)
 #
 # Field reference:
 #   type:     string | integer | boolean | enum   (wire format is always a string)
 #   required: bool, or {chart: bool, compose: bool} for per-context requiredness
 #             — "required for that context's DEFAULT configuration", which is
 #             what .env.example renders uncommented
-#   required_when: free text spelling out a CONDITIONAL requirement (e.g. only
-#             with a particular adapter). Rendered into both customer surfaces;
-#             cannot be combined with a flat `required: true`
+#   required_when: structured conditional requirement with a human description
+#             plus a machine-readable condition. Conditions use `var` with one
+#             of `equals`, `one_of`, or `present`, nest via `all` / `any`, or
+#             name a declared deployment context. Cannot be combined with a
+#             flat `required: true`.
 #   secret:   true -> must live in a Secret / PasswordBox, never a ConfigMap or plain env
 #   default:  scalar (app compiled-in), or {app:, chart:, compose:} when packaging overrides
 #   tier:     core     -> shown uncommented in .env.example; primary docs
@@ -59,6 +62,11 @@ categories:
     title: BEAM / OS tuning
   - id: deploy
     title: Deployment settings (not read by the app)
+
+requirement_contexts:
+  first_admin_bootstrap: >-
+    A fresh database has no platform admin yet, so an operator must seed the
+    first one out of band before the backoffice is reachable.
 
 # Variables the application reads that are deliberately OUTSIDE the customer
 # contract, each with the reason. `scripts/check-contract-parity.py` reads this
@@ -709,9 +717,13 @@ vars:
       relays refuse the envelope.
     type: string
     required: { chart: false, compose: true }
-    required_when: >-
-      MAILER_ADAPTER is "mailpace" or "smtp" (blank counts as missing and
-      fails at boot); not read with "none"
+    required_when:
+      description: >-
+        MAILER_ADAPTER is "mailpace" or "smtp" (blank counts as missing and
+        fails at boot); not read with "none"
+      condition:
+        var: MAILER_ADAPTER
+        one_of: [mailpace, smtp]
     secret: false
     tier: core
     source: user
@@ -736,7 +748,9 @@ vars:
     description: MailPace API token.
     type: string
     required: { chart: false, compose: true }
-    required_when: MAILER_ADAPTER=mailpace (the default)
+    required_when:
+      description: MAILER_ADAPTER=mailpace (the default)
+      condition: { var: MAILER_ADAPTER, equals: mailpace }
     secret: true
     tier: core
     source: user
@@ -746,7 +760,9 @@ vars:
     description: SMTP relay hostname. Configured explicitly, so no MX lookup is done on it.
     type: string
     required: false
-    required_when: MAILER_ADAPTER=smtp
+    required_when:
+      description: MAILER_ADAPTER=smtp
+      condition: { var: MAILER_ADAPTER, equals: smtp }
     secret: false
     tier: core
     source: user
@@ -780,7 +796,14 @@ vars:
     description: SMTP password for MAILER_SMTP_USERNAME.
     type: string
     required: false
-    required_when: the relay authenticates (i.e. MAILER_SMTP_USERNAME is set)
+    required_when:
+      description: >-
+        MAILER_ADAPTER=smtp and MAILER_SMTP_USERNAME is set (blank counts as
+        missing)
+      condition:
+        all:
+          - { var: MAILER_ADAPTER, equals: smtp }
+          - { var: MAILER_SMTP_USERNAME, present: true }
     secret: true
     tier: core
     source: user
@@ -1044,12 +1067,15 @@ vars:
       Comma-separated emails granted platform-admin on reconciliation. This is
       the first-admin bootstrap: a fresh install has no account that can reach
       the backoffice, so set this and then run
-      `bin/edspace rpc 'Edspace.Accounts.AdminReconcilerWorker.enqueue()'`
-      inside the app container. Additive only — it never demotes an existing
-      admin. Read at job-perform time on the serving node.
+      `bin/edspace rpc 'Edspace.Accounts.AdminReconciler.bootstrap() |>
+      IO.inspect(pretty: true)'` inside the app container. With email disabled,
+      the result contains onboarding links to hand over securely. Additive only
+      — it never demotes an existing admin. Read on the serving node.
     type: string
     required: false
-    required_when: bootstrapping the first platform admin on a fresh install
+    required_when:
+      description: bootstrapping the first platform admin on a fresh install
+      condition: { context: first_admin_bootstrap }
     secret: false
     tier: core
     source: user

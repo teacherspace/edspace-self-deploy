@@ -462,13 +462,14 @@ resource mailpaceApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = i
   properties: { value: mailerAdapter == 'mailpace' ? mailpaceApiKey : 'unused-mailer-adapter-${mailerAdapter}' }
 }
 
-// An SMTP relay on a trusted network may take no credentials at all, so an
-// empty password here is legitimate and takes the placeholder; the container
-// app then omits MAILER_SMTP_PASSWORD entirely.
+// An SMTP relay on a trusted network may take no credentials at all. Once a
+// username is supplied, however, the real password is written unmodified: an
+// empty value makes Key Vault reject the deployment before a credentialless
+// app revision can be created.
 resource smtpPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'smtp-password'
-  properties: { value: mailerAdapter == 'smtp' && !empty(mailSmtpPassword) ? mailSmtpPassword : 'unused-mailer-adapter-${mailerAdapter}' }
+  properties: { value: mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? mailSmtpPassword : 'unused-mailer-adapter-${mailerAdapter}' }
 }
 
 // Same always-created / placeholder-when-disabled pattern as the mailer
@@ -541,7 +542,7 @@ module app 'modules/containerApp.bicep' = {
     secretKeyBase: keyVault.getSecret('secret-key-base')
     tokenSigningSecret: keyVault.getSecret('token-signing-secret')
     mailpaceApiKey: mailerAdapter == 'mailpace' ? keyVault.getSecret('mailpace-api-key') : ''
-    mailSmtpPassword: mailerAdapter == 'smtp' && !empty(mailSmtpPassword) ? keyVault.getSecret('smtp-password') : ''
+    mailSmtpPassword: mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? keyVault.getSecret('smtp-password') : ''
     microsoftClientSecret: enableMicrosoftSso ? keyVault.getSecret('microsoft-client-secret') : ''
     llmApiKeyFromKv: keyVault.getSecret('llm-api-key')
     // BCP422: lazy if() — listKeys only evaluates when enableAzureAi is true,

@@ -263,7 +263,7 @@
             "visible": "[not(equals(steps('application').mailerAdapter, 'none'))]",
             "toolTip": "Sender address for transactional email. It must be verified with your provider, or messages are rejected.",
             "constraints": {
-              "required": "[not(equals(steps('application').mailerAdapter, 'none'))]",
+              "required": "[or(equals(steps('application').mailerAdapter, 'mailpace'), equals(steps('application').mailerAdapter, 'smtp'))]",
               "regex": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
               "validationMessage": "Enter a valid email address."
             }
@@ -335,7 +335,7 @@
             "label": { "password": "SMTP password", "confirmPassword": "Confirm SMTP password" },
             "visible": "[equals(steps('application').mailerAdapter, 'smtp')]",
             "toolTip": "Password for the SMTP username above. Leave empty only if the relay takes no credentials.",
-            "constraints": { "required": false }
+            "constraints": { "required": "[and(equals(steps('application').mailerAdapter, 'smtp'), not(empty(steps('application').mailSmtpUsername)))]" }
           }
         ]
       },

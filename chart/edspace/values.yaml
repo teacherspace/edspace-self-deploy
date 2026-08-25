@@ -162,6 +162,13 @@ mailer:
     tls: ""
     auth: ""
     tlsVerify: true
+    # -- Existing Secret containing a PEM CA bundle for an internal SMTP
+    # relay. The chart mounts it read-only and sets MAILER_SMTP_CACERTFILE.
+    caCertSecret: ""
+    # -- Key inside caCertSecret containing the PEM bundle.
+    caCertSecretKey: ca.crt
+    # -- CA path already present in a custom image. Mutually exclusive with
+    # caCertSecret; ordinary installs should prefer the mounted Secret above.
     caCertFile: ""
     noMxLookups: true
   # -- Customer-managed Secret holding the mailer credential: the MailPace

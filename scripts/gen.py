@@ -9,6 +9,7 @@ Outputs (committed to the repo; CI verifies freshness):
   compose/.env.example            user-facing env template
   chart/edspace/values.schema.json  base schema + env/envSecret validation
   docs/env-vars.md                reference table
+  config/conditional-requirements.json  machine-readable requirement predicates
 
 Usage:
   uv run scripts/gen.py           regenerate files in place
@@ -32,6 +33,7 @@ SCHEMA_BASE = ROOT / "config" / "values.schema.base.json"
 OUT_ENV_EXAMPLE = ROOT / "compose" / ".env.example"
 OUT_VALUES_SCHEMA = ROOT / "chart" / "edspace" / "values.schema.json"
 OUT_DOCS = ROOT / "docs" / "env-vars.md"
+OUT_CONDITIONAL_REQUIREMENTS = ROOT / "config" / "conditional-requirements.json"
 
 TIERS = {"core", "advanced", "internal"}
 SOURCES = {"user", "computed", "fixed"}
@@ -97,12 +99,92 @@ class ContractError(Exception):
     pass
 
 
+def required_when_description(v: dict) -> str | None:
+    required_when = v.get("required_when")
+    return required_when.get("description") if isinstance(required_when, dict) else None
+
+
+def validate_condition(
+    condition: object,
+    path: str,
+    variable_names: set[str],
+    context_names: set[str],
+    errors: list[str],
+) -> None:
+    if not isinstance(condition, dict):
+        errors.append(f"{path}: condition must be a map")
+        return
+
+    forms = [key for key in ("all", "any", "var", "context") if key in condition]
+    if len(forms) != 1:
+        errors.append(f"{path}: condition needs exactly one of all, any, var, context")
+        return
+
+    form = forms[0]
+    if form in ("all", "any"):
+        children = condition[form]
+        if not isinstance(children, list) or not children:
+            errors.append(f"{path}.{form}: must be a non-empty list")
+            return
+        if set(condition) != {form}:
+            errors.append(f"{path}: {form} cannot be combined with other keys")
+        for index, child in enumerate(children):
+            validate_condition(
+                child,
+                f"{path}.{form}[{index}]",
+                variable_names,
+                context_names,
+                errors,
+            )
+        return
+
+    if form == "context":
+        if set(condition) != {"context"}:
+            errors.append(f"{path}: context cannot be combined with other keys")
+        if not isinstance(condition["context"], str):
+            errors.append(f"{path}.context: must be a string")
+        elif condition["context"] not in context_names:
+            errors.append(f"{path}: unknown requirement context {condition['context']!r}")
+        return
+
+    variable = condition["var"]
+    if not isinstance(variable, str):
+        errors.append(f"{path}.var: must be a string")
+    elif variable not in variable_names:
+        errors.append(f"{path}: unknown variable {variable!r}")
+
+    operators = [key for key in ("equals", "one_of", "present") if key in condition]
+    if len(operators) != 1 or set(condition) != {"var", *operators}:
+        errors.append(f"{path}: var condition needs exactly one of equals, one_of, present")
+        return
+
+    operator = operators[0]
+    value = condition[operator]
+    if operator == "equals" and isinstance(value, (dict, list)):
+        errors.append(f"{path}.equals: must be a scalar")
+    if operator == "one_of":
+        if not isinstance(value, list) or not value:
+            errors.append(f"{path}.one_of: must be a non-empty list")
+        elif any(isinstance(item, (dict, list)) for item in value):
+            errors.append(f"{path}.one_of: values must be scalars")
+    if operator == "present" and not isinstance(condition[operator], bool):
+        errors.append(f"{path}.present: must be a bool")
+
+
 def load_contract() -> tuple[list[dict], list[dict]]:
     data = yaml.safe_load(CONTRACT.read_text())
     categories = data.get("categories") or []
     variables = data.get("vars") or []
     excluded = data.get("excluded") or []
+    requirement_contexts = data.get("requirement_contexts") or {}
     errors: list[str] = []
+
+    if not isinstance(requirement_contexts, dict) or not all(
+        isinstance(name, str) and isinstance(description, str) and description.strip()
+        for name, description in requirement_contexts.items()
+    ):
+        errors.append("requirement_contexts must map names to non-empty descriptions")
+        requirement_contexts = {}
 
     # Deliberate omissions, consumed by scripts/check-contract-parity.py.
     # Validated here so a malformed entry fails at `make gen` rather than
@@ -142,8 +224,16 @@ def load_contract() -> tuple[list[dict], list[dict]]:
         if not (isinstance(req, bool) or isinstance(req, dict)):
             errors.append(f"{name}: required must be bool or {{chart,compose}} map")
         rw = v.get("required_when")
-        if rw is not None and not (isinstance(rw, str) and rw.strip()):
-            errors.append(f"{name}: required_when must be a non-empty string")
+        if rw is not None and not (
+            isinstance(rw, dict)
+            and isinstance(rw.get("description"), str)
+            and rw["description"].strip()
+            and isinstance(rw.get("condition"), dict)
+            and set(rw) == {"description", "condition"}
+        ):
+            errors.append(
+                f"{name}: required_when needs exactly a non-empty description and condition"
+            )
         if rw and req is True:
             errors.append(
                 f"{name}: required_when contradicts required: true "
@@ -154,6 +244,16 @@ def load_contract() -> tuple[list[dict], list[dict]]:
         if v.get("source") in ("computed", "fixed") and name not in PRODUCED_VARS:
             errors.append(
                 f"{name}: source={v['source']} but no producer registered in gen.py"
+            )
+
+    for v in variables:
+        if isinstance(v.get("required_when"), dict):
+            validate_condition(
+                v["required_when"].get("condition"),
+                f"{v['name']}.required_when",
+                seen,
+                set(requirement_contexts),
+                errors,
             )
 
     for name in sorted(CHART_STRUCTURED_VARS - seen):
@@ -232,7 +332,7 @@ def gen_env_example(categories: list[dict], variables: list[dict]) -> str:
             if v.get("enum"):
                 lines.append("# One of: " + ", ".join(v["enum"]))
             if v.get("required_when"):
-                lines += wrap_comment("Required when " + v["required_when"] + ".")
+                lines += wrap_comment("Required when " + required_when_description(v) + ".")
             elif required_for(v, "compose"):
                 lines.append("# Required.")
             default = default_for(v, "compose")
@@ -401,7 +501,11 @@ def gen_docs(categories: list[dict], variables: list[dict]) -> str:
             if v["type"] == "enum":
                 desc += " One of: " + ", ".join(f"`{e}`" for e in v["enum"]) + "."
             if v.get("required_when"):
-                desc += " **Required when** " + " ".join(v["required_when"].split()) + "."
+                desc += (
+                    " **Required when** "
+                    + " ".join(required_when_description(v).split())
+                    + "."
+                )
             lines.append(
                 f"| `{v['name']}` | {req_s} | {md_escape(default)} | "
                 f"{'yes' if v['secret'] else ''} | {md_escape(desc)} |"
@@ -420,6 +524,19 @@ def gen_docs(categories: list[dict], variables: list[dict]) -> str:
     return "\n".join(lines)
 
 
+def gen_conditional_requirements(variables: list[dict]) -> str:
+    requirements = {
+        variable["name"]: variable["required_when"]
+        for variable in variables
+        if variable.get("required_when")
+    }
+    return json.dumps(
+        {"$comment": GENERATED_BANNER, "requirements": requirements},
+        indent=2,
+        sort_keys=False,
+    ) + "\n"
+
+
 # ------------------------------------------------------------------------ main
 def main() -> int:
     check = "--check" in sys.argv[1:]
@@ -433,6 +550,7 @@ def main() -> int:
         OUT_ENV_EXAMPLE: gen_env_example(categories, variables),
         OUT_VALUES_SCHEMA: gen_values_schema(variables),
         OUT_DOCS: gen_docs(categories, variables),
+        OUT_CONDITIONAL_REQUIREMENTS: gen_conditional_requirements(variables),
     }
 
     stale = False

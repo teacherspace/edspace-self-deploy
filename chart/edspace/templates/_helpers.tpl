@@ -289,14 +289,39 @@ MAILER_SMTP_TLS: {{ . | quote }}
 {{- with .auth }}
 MAILER_SMTP_AUTH: {{ . | quote }}
 {{- end }}
+{{- if .caCertSecret }}
+MAILER_SMTP_CACERTFILE: "/etc/edspace/mailer-ca/ca.crt"
+{{- else }}
 {{- with .caCertFile }}
 MAILER_SMTP_CACERTFILE: {{ . | quote }}
 {{- end }}
+{{- end }}
+
 {{- end }}
 {{- end }}
 {{- end }}
 {{- range $k, $v := .Values.env }}
 {{ $k }}: {{ $v | toString | quote }}
+{{- end }}
+{{- end }}
+
+{{/* SMTP CA Secret volume shared by app, migration and seed pods. */}}
+{{- define "edspace.mailerCaVolumeMount" -}}
+{{- if and (eq .Values.mailer.adapter "smtp") .Values.mailer.smtp.caCertSecret }}
+- name: mailer-ca
+  mountPath: /etc/edspace/mailer-ca
+  readOnly: true
+{{- end }}
+{{- end }}
+
+{{- define "edspace.mailerCaVolume" -}}
+{{- if and (eq .Values.mailer.adapter "smtp") .Values.mailer.smtp.caCertSecret }}
+- name: mailer-ca
+  secret:
+    secretName: {{ .Values.mailer.smtp.caCertSecret }}
+    items:
+      - key: {{ .Values.mailer.smtp.caCertSecretKey }}
+        path: ca.crt
 {{- end }}
 {{- end }}
 
@@ -355,6 +380,9 @@ the pod spec.
 
 {{/* Cross-field checks JSON Schema cannot express. */}}
 {{- define "edspace.validateValues" -}}
+{{- if and .Values.mailer.smtp.caCertFile .Values.mailer.smtp.caCertSecret }}
+{{- fail "mailer.smtp.caCertFile and mailer.smtp.caCertSecret are mutually exclusive" }}
+{{- end }}
 {{- if and .Values.autoscaling.enabled (gt (int .Values.autoscaling.minReplicas) (int .Values.autoscaling.maxReplicas)) }}
 {{- fail "autoscaling.minReplicas must be less than or equal to autoscaling.maxReplicas" }}
 {{- end }}

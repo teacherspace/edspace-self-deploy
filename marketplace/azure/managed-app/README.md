@@ -41,6 +41,11 @@ az deployment group create -g rg-edspace \
   password recovery in this mode — see the root
   [docs/limitations.md](../../../docs/limitations.md).
 
+  For the first platform admin, run `Edspace.Accounts.AdminReconciler.bootstrap/0`
+  as described in the root quickstart. In `none` mode it returns the initial
+  seven-day onboarding link directly; no email-only install is left waiting for
+  a password it has no way to create.
+
 A missing credential fails the deployment (Key Vault rejects the empty value)
 rather than installing an app that cannot send.
 

@@ -21,7 +21,7 @@ mailer:
     relay: smtp.internal.example
     username: edspace
     password: ci-dummy-smtp-password
-    caCertFile: /etc/ssl/certs/internal-ca.pem
+    caCertSecret: internal-smtp-ca
 env:
   EDSPACE_PLATFORM_ADMINS: admin@example.org
   MEMBER_PURGE_ENABLED: "false"

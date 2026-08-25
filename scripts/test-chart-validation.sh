@@ -37,6 +37,41 @@ expect_fail() {
   echo "ok - rejects $name"
 }
 
+expect_render_contains() {
+  local name=$1
+  local expected=$2
+  shift 2
+  if ! helm template edspace "$CHART" "$@" >/tmp/edspace-chart-test.log 2>&1; then
+    echo "FAIL (expected render): $name" >&2
+    cat /tmp/edspace-chart-test.log >&2
+    exit 1
+  fi
+  if ! grep -Fq -- "$expected" /tmp/edspace-chart-test.log; then
+    echo "FAIL (render missing '$expected'): $name" >&2
+    exit 1
+  fi
+  echo "ok - $name"
+}
+
+expect_render_count() {
+  local name=$1
+  local expected_count=$2
+  local expected=$3
+  shift 3
+  if ! helm template edspace "$CHART" "$@" >/tmp/edspace-chart-test.log 2>&1; then
+    echo "FAIL (expected render): $name" >&2
+    cat /tmp/edspace-chart-test.log >&2
+    exit 1
+  fi
+  local actual_count
+  actual_count=$(grep -Fc -- "$expected" /tmp/edspace-chart-test.log || true)
+  if [ "$actual_count" -ne "$expected_count" ]; then
+    echo "FAIL (expected $expected_count occurrences of '$expected', got $actual_count): $name" >&2
+    exit 1
+  fi
+  echo "ok - $name"
+}
+
 trap 'rm -f /tmp/edspace-chart-test.log' EXIT
 
 expect_pass "minimal external install" "${VALID[@]}"
@@ -69,10 +104,25 @@ SMTP=(
 )
 expect_pass "email disabled without any mailer credential" "${NO_MAIL[@]}"
 expect_pass "SMTP relay install" "${SMTP[@]}"
+expect_pass "SMTP relay without authentication" "${SMTP[@]}" \
+  --set-string mailer.smtp.password=
 expect_pass "SMTP relay with a customer-managed password Secret" "${SMTP[@]}" \
+  --set-string mailer.smtp.username=teacher \
   --set-string mailer.smtp.password= --set-string mailer.existingSecret=my-mailer
 expect_fail "SMTP without a relay host" "${SMTP[@]}" --set-string mailer.smtp.relay=
 expect_fail "SMTP without a verified sender" "${SMTP[@]}" --set-string mailer.fromEmail=
+expect_fail "SMTP username without a password" "${SMTP[@]}" \
+  --set-string mailer.smtp.username=teacher --set-string mailer.smtp.password=
+expect_render_count "SMTP CA Secret is mounted into app, migration, and seed pods" 3 \
+  'secretName: customer-smtp-ca' "${SMTP[@]}" \
+  --set seed.enabled=true \
+  --set-string mailer.smtp.caCertSecret=customer-smtp-ca
+expect_render_contains "SMTP CA Secret configures the mounted PEM path" \
+  'MAILER_SMTP_CACERTFILE: "/etc/edspace/mailer-ca/ca.crt"' "${SMTP[@]}" \
+  --set-string mailer.smtp.caCertSecret=customer-smtp-ca
+expect_fail "two SMTP CA sources" "${SMTP[@]}" \
+  --set-string mailer.smtp.caCertSecret=customer-smtp-ca \
+  --set-string mailer.smtp.caCertFile=/custom/image/ca.pem
 expect_fail "unknown mailer adapter" "${VALID[@]}" --set-string mailer.adapter=sendgrid
 expect_fail "development-only local adapter" "${VALID[@]}" --set-string mailer.adapter=local
 expect_fail "invalid SMTP TLS mode" "${SMTP[@]}" --set-string mailer.smtp.tls=maybe
@@ -108,3 +158,5 @@ expect_fail "autoscaling minimum above maximum" "${VALID[@]}" \
   --set-string storage.azureBlob.container=uploads \
   --set-string storage.azureBlob.key=ci-blob-key
 expect_fail "Azure provider without endpoint/deployments" "${VALID[@]}" --set-string llm.provider=azure
+
+python3 scripts/test-conditional-requirements.py

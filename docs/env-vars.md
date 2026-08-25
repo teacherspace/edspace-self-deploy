@@ -75,7 +75,7 @@ Variables marked *managed* are composed by the deployment packaging
 | `MAILER_SMTP_RELAY` | conditional |  |  | SMTP relay hostname. Configured explicitly, so no MX lookup is done on it. **Required when** MAILER_ADAPTER=smtp. |
 | `MAILER_SMTP_PORT` | no | 587 |  | SMTP relay port. 587 is the STARTTLS submission port; use 465 together with MAILER_SMTP_SSL=true for implicit TLS. |
 | `MAILER_SMTP_USERNAME` | no |  |  | SMTP username. Setting it flips MAILER_SMTP_AUTH to "always" — a relay given credentials is expected to use them. |
-| `MAILER_SMTP_PASSWORD` | conditional |  | yes | SMTP password for MAILER_SMTP_USERNAME. **Required when** the relay authenticates (i.e. MAILER_SMTP_USERNAME is set). |
+| `MAILER_SMTP_PASSWORD` | conditional |  | yes | SMTP password for MAILER_SMTP_USERNAME. **Required when** MAILER_ADAPTER=smtp and MAILER_SMTP_USERNAME is set (blank counts as missing). |
 | `MAILER_SMTP_SSL` | no | false |  | Implicit TLS from the first byte, usually on port 465. Leave false for the ordinary STARTTLS submission port. |
 | `MAILER_SMTP_TLS` | no | always |  | STARTTLS policy. Mandatory by default: with "if_available" a relay that does not advertise STARTTLS — or anyone in the middle stripping the capability — gets the session in cleartext, credentials and sign-in links included. Set "never" only for a relay on a trusted network. The default flips to "never" when MAILER_SMTP_SSL=true, where the session is already encrypted and STARTTLS is never offered. One of: `always`, `never`, `if_available`. |
 | `MAILER_SMTP_AUTH` | no | if_available |  | SMTP authentication policy. Defaults to "always" when MAILER_SMTP_USERNAME is set and "if_available" when it is not. One of: `always`, `never`, `if_available`. |
@@ -104,7 +104,7 @@ Variables marked *managed* are composed by the deployment packaging
 | `PRAXIS_LICENSE_SERVICE_URL` | no |  |  | Praxis license service endpoint. |
 | `PRAXIS_LICENSE_API_KEY` | no |  | yes | Praxis license service API key. |
 | `PRAXIS_PRODUCT_URL` | no |  |  | Praxis product URL used in license redirects. |
-| `EDSPACE_PLATFORM_ADMINS` | conditional |  |  | Comma-separated emails granted platform-admin on reconciliation. This is the first-admin bootstrap: a fresh install has no account that can reach the backoffice, so set this and then run `bin/edspace rpc 'Edspace.Accounts.AdminReconcilerWorker.enqueue()'` inside the app container. Additive only — it never demotes an existing admin. Read at job-perform time on the serving node. **Required when** bootstrapping the first platform admin on a fresh install. |
+| `EDSPACE_PLATFORM_ADMINS` | conditional |  |  | Comma-separated emails granted platform-admin on reconciliation. This is the first-admin bootstrap: a fresh install has no account that can reach the backoffice, so set this and then run `bin/edspace rpc 'Edspace.Accounts.AdminReconciler.bootstrap() \|> IO.inspect(pretty: true)'` inside the app container. With email disabled, the result contains onboarding links to hand over securely. Additive only — it never demotes an existing admin. Read on the serving node. **Required when** bootstrapping the first platform admin on a fresh install. |
 
 ## Member retention & purge
 

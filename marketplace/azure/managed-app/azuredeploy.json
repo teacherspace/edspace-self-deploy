@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "5968391573167350572"
+      "templateHash": "1041974425984738088"
     }
   },
   "parameters": {
@@ -630,7 +630,7 @@
       "apiVersion": "2025-05-01",
       "name": "[format('{0}/{1}', variables('keyVaultName'), 'smtp-password')]",
       "properties": {
-        "value": "[if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpPassword')))), parameters('mailSmtpPassword'), format('unused-mailer-adapter-{0}', parameters('mailerAdapter')))]"
+        "value": "[if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), parameters('mailSmtpPassword'), format('unused-mailer-adapter-{0}', parameters('mailerAdapter')))]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
@@ -943,7 +943,7 @@
             }
           },
           "mailpaceApiKey": "[if(equals(parameters('mailerAdapter'), 'mailpace'), createObject('reference', createObject('keyVault', createObject('id', resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))), 'secretName', 'mailpace-api-key')), createObject('value', ''))]",
-          "mailSmtpPassword": "[if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpPassword')))), createObject('reference', createObject('keyVault', createObject('id', resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))), 'secretName', 'smtp-password')), createObject('value', ''))]",
+          "mailSmtpPassword": "[if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createObject('reference', createObject('keyVault', createObject('id', resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))), 'secretName', 'smtp-password')), createObject('value', ''))]",
           "microsoftClientSecret": "[if(parameters('enableMicrosoftSso'), createObject('reference', createObject('keyVault', createObject('id', resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))), 'secretName', 'microsoft-client-secret')), createObject('value', ''))]",
           "llmApiKeyFromKv": {
             "reference": {
