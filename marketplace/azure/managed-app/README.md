@@ -27,6 +27,61 @@ az deployment group create -g rg-edspace \
   -f azuredeploy.json -p @my.parameters.json
 ```
 
+**Choosing a mailer.** `mailerAdapter` is `mailpace` (the default), `smtp`, or
+`none`:
+
+- `smtp` — drop `mailpaceApiKey` and set `mailSmtpRelay`, plus
+  `mailSmtpUsername`/`mailSmtpPassword` if the relay authenticates. For
+  implicit TLS set `mailSmtpSsl: true` and `mailSmtpPort: 465`; otherwise the
+  defaults give STARTTLS on 587 with the relay's certificate verified.
+- `none` — drop `mailpaceApiKey` and `mailFromEmail` entirely. EdSpace only
+  ever emails about account access, so a school whose users all arrive through
+  SSO needs no provider; the app then offers a password form on `/sign-in` and
+  shows each invitation's link to the inviting admin. There is no self-service
+  password recovery in this mode — see the root
+  [docs/limitations.md](../../../docs/limitations.md).
+
+  For the first platform admin, run `Edspace.Accounts.AdminReconciler.bootstrap/0`
+  as described in the root quickstart. In `none` mode it returns the initial
+  seven-day onboarding link directly; no email-only install is left waiting for
+  a password it has no way to create.
+
+A missing credential fails the deployment (Key Vault rejects the empty value)
+rather than installing an app that cannot send.
+
+**Microsoft Entra ID sign-in.** Off by default. To enable it, first create an
+app registration in your tenant (Entra admin center → App registrations → New):
+
+1. Platform **Web**, redirect URI `https://<app host>/auth/microsoft/callback`.
+   The `microsoftRedirectUri` output shows the exact value in either case
+   (custom domain or generated host); with a custom domain it is known up
+   front, otherwise deploy first and copy it from the outputs.
+2. **Certificates & secrets** → new client secret; copy its *Value*.
+3. **Token configuration** → add the optional `email` claim; **API
+   permissions** → `openid`, `profile`, `email` (Microsoft Graph, delegated).
+
+Then pass `enableMicrosoftSso: true`, `microsoftTenantId` (your Directory
+(tenant) ID, or `organizations` for any work/school account),
+`microsoftClientId` and `microsoftClientSecret`. The template composes
+`MICROSOFT_REDIRECT_URI` from the app host itself. An enabled SSO with an empty
+secret fails the deployment the same way a missing mailer credential does.
+
+Enabling it on an existing instance without redeploying the template:
+
+```sh
+az containerapp secret set -n edspace -g rg-edspace \
+  --secrets microsoft-client-secret=<value>
+az containerapp update -n edspace -g rg-edspace --set-env-vars \
+  MICROSOFT_TENANT_ID=<tenant-id> MICROSOFT_CLIENT_ID=<client-id> \
+  MICROSOFT_CLIENT_SECRET=secretref:microsoft-client-secret \
+  MICROSOFT_REDIRECT_URI=https://<app host>/auth/microsoft/callback
+```
+
+A later `az deployment group create` with `enableMicrosoftSso=false` would
+strip those vars again, so also record the choice in your parameters file.
+Rotate the secret before its Entra expiry with the same `secret set` command
+(the running revision picks it up on the next restart).
+
 Fresh installs use the default `bootstrapSecrets=true`. Infra changes to an
 **existing** instance must add `-p bootstrapSecrets=false` — see the secret
 model below; forgetting it rotates every generated secret.
@@ -68,8 +123,13 @@ will be authorized on the test definition; it rejects missing/zero values.
 - On **first install** (`bootstrapSecrets=true`, pinned by createUiDefinition)
   the template generates `SECRET_KEY_BASE`, `TOKEN_SIGNING_SECRET` and the PG
   admin password from `newGuid()` parameter defaults and persists them —
-  along with the user-supplied MailPace key, registry token, and BYO LLM key —
-  into the instance Key Vault (`kv-eds-<suffix>`).
+  along with the user-supplied mailer credential, registry token, and BYO LLM
+  key — into the instance Key Vault (`kv-eds-<suffix>`).
+- `mailpace-api-key`, `smtp-password` and `microsoft-client-secret` are always
+  created, holding an `unused-…` placeholder when their feature is not chosen:
+  `getSecret()` cannot sit behind a conditional at a module call site, and Key
+  Vault rejects an empty value. The container app binds only the one its
+  adapter uses.
 - **Every consumer reads from the vault** via `getSecret()`; raw parameters
   are never used directly downstream.
 - A Key Vault secret PUT always writes a new version, and `newGuid()` defaults
@@ -158,8 +218,12 @@ Don't.
 
 `PHX_HOST` is set at install: the generated
 `edspace.<env-default-domain>` FQDN, or the customer's `customDomain` if
-supplied. Custom-domain *binding* can't complete in one ARM pass (async DNS
-validation + the customer can't touch the managed RG):
+supplied. With a custom domain, `PHX_CHECK_ORIGIN` allows **both** hosts, so
+the instance stays usable (WebSockets included) at the generated address —
+the `appFqdn` output — until the domain is bound; only links the app
+generates itself (emails, the Microsoft redirect URI, `appUrl`) use the custom
+domain from the start. Custom-domain *binding* can't complete in one ARM pass
+(async DNS validation + the customer can't touch the managed RG):
 
 1. Customer creates a CNAME `<domain> -> <appFqdn>` and TXT
    `asuid.<domain> -> <ACA custom domain verification id>`.
@@ -171,9 +235,12 @@ validation + the customer can't touch the managed RG):
 
 | Template parameter | App env var |
 |---|---|
-| `customDomain` (or generated FQDN) | `PHX_HOST`, `PHX_CHECK_ORIGIN` |
-| `mailpaceApiKey` | `MAILPACE_API_KEY` |
-| `mailFromEmail` / `mailFromName` | `MAILER_FROM_EMAIL` / `MAILER_FROM_NAME` |
+| `customDomain` (or generated FQDN) | `PHX_HOST`; `PHX_CHECK_ORIGIN` (custom domain **and** generated FQDN when a custom domain is set) |
+| `mailerAdapter` | `MAILER_ADAPTER` |
+| `mailpaceApiKey` | `MAILPACE_API_KEY` (adapter `mailpace` only) |
+| `mailFromEmail` / `mailFromName` | `MAILER_FROM_EMAIL` / `MAILER_FROM_NAME` (omitted under adapter `none`) |
+| `mailSmtpRelay` / `mailSmtpPort` / `mailSmtpSsl` | `MAILER_SMTP_RELAY` / `MAILER_SMTP_PORT` / `MAILER_SMTP_SSL` (adapter `smtp` only) |
+| `mailSmtpUsername` / `mailSmtpPassword` | `MAILER_SMTP_USERNAME` / `MAILER_SMTP_PASSWORD` (adapter `smtp` only) |
 | `byoLlmBaseUrl` / AI account endpoint | `EDSPACE_LLM_BASE_URL` |
 | `byoLlmApiKey` / AI account key1 | `EDSPACE_LLM_API_KEY` |
 | `byoLlm*Deployment` / fixed model names | `EDSPACE_LLM_{TEXT,SMALL,EMBEDDING}_DEPLOYMENT` |

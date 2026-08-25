@@ -15,6 +15,11 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
+      # Required, and the one required value generate-secrets.sh does not
+      # fill in. .env.example ships it empty and the app treats empty as set
+      # (booting with blank invite/reset URLs and a "//" origin check), so
+      # fail here instead — `:?` rejects unset AND empty.
+      PHX_HOST: ${PHX_HOST:?set PHX_HOST in .env (e.g. edspace.school.example)}
       # POSTGRES_PASSWORD is hex (scripts/generate-secrets.sh); a hand-set
       # password must not contain URL-reserved characters (@ : / ? #).
       DATABASE_URL: ecto://edspace:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/edspace
@@ -69,6 +74,7 @@ services:
     env_file: .env
     environment:
       # Keep these overrides in sync with the app service above.
+      PHX_HOST: ${PHX_HOST:?set PHX_HOST in .env (e.g. edspace.school.example)}
       DATABASE_URL: ecto://edspace:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/edspace
       EDSPACE_FILE_STORAGE_ADAPTER: ${EDSPACE_FILE_STORAGE_ADAPTER:-local_disk}
       EDSPACE_FILE_STORAGE_ROOT: ${EDSPACE_FILE_STORAGE_ROOT:-/app/uploads}

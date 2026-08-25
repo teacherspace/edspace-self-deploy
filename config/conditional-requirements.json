@@ -1,0 +1,50 @@
+{
+  "$comment": "GENERATED FILE - edit config/contract.yaml and run `make gen`.",
+  "requirements": {
+    "MAILER_FROM_EMAIL": {
+      "description": "MAILER_ADAPTER is \"mailpace\" or \"smtp\" (blank counts as missing and fails at boot); not read with \"none\"",
+      "condition": {
+        "var": "MAILER_ADAPTER",
+        "one_of": [
+          "mailpace",
+          "smtp"
+        ]
+      }
+    },
+    "MAILPACE_API_KEY": {
+      "description": "MAILER_ADAPTER=mailpace (the default)",
+      "condition": {
+        "var": "MAILER_ADAPTER",
+        "equals": "mailpace"
+      }
+    },
+    "MAILER_SMTP_RELAY": {
+      "description": "MAILER_ADAPTER=smtp",
+      "condition": {
+        "var": "MAILER_ADAPTER",
+        "equals": "smtp"
+      }
+    },
+    "MAILER_SMTP_PASSWORD": {
+      "description": "MAILER_ADAPTER=smtp and MAILER_SMTP_USERNAME is set (blank counts as missing)",
+      "condition": {
+        "all": [
+          {
+            "var": "MAILER_ADAPTER",
+            "equals": "smtp"
+          },
+          {
+            "var": "MAILER_SMTP_USERNAME",
+            "present": true
+          }
+        ]
+      }
+    },
+    "EDSPACE_PLATFORM_ADMINS": {
+      "description": "bootstrapping the first platform admin on a fresh install",
+      "condition": {
+        "context": "first_admin_bootstrap"
+      }
+    }
+  }
+}

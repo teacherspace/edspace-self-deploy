@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "4105260444897359069"
+      "templateHash": "18209998362260074049"
     }
   },
   "parameters": {
@@ -187,17 +187,30 @@
         "description": "Custom public hostname. Leave empty to use the generated *.azurecontainerapps.io address. Custom domains are bound post-install by EdSpace support (see README)."
       }
     },
+    "mailerAdapter": {
+      "type": "string",
+      "defaultValue": "mailpace",
+      "allowedValues": [
+        "mailpace",
+        "smtp",
+        "none"
+      ],
+      "metadata": {
+        "description": "Transactional-email backend. \"none\" disables email: sign-in then uses a password and/or SSO, and invitation links are shown to the inviting admin to pass on."
+      }
+    },
     "mailpaceApiKey": {
       "type": "securestring",
       "defaultValue": "",
       "metadata": {
-        "description": "MailPace API key. Transactional email is required — invitations and magic-link sign-in depend on it."
+        "description": "MailPace API key. Required when the mailer is MailPace."
       }
     },
     "mailFromEmail": {
       "type": "string",
+      "defaultValue": "",
       "metadata": {
-        "description": "From address for all outgoing email (must be a verified MailPace domain)."
+        "description": "From address for all outgoing email, verified with your provider. Required unless the mailer is \"none\"."
       }
     },
     "mailFromName": {
@@ -205,6 +218,71 @@
       "defaultValue": "EdSpace",
       "metadata": {
         "description": "Display name for outgoing email."
+      }
+    },
+    "mailSmtpRelay": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SMTP relay hostname. Required when the mailer is SMTP."
+      }
+    },
+    "mailSmtpPort": {
+      "type": "int",
+      "defaultValue": 587,
+      "minValue": 1,
+      "maxValue": 65535,
+      "metadata": {
+        "description": "SMTP relay port. 587 is the STARTTLS submission port."
+      }
+    },
+    "mailSmtpSsl": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Implicit TLS from the first byte, paired with port 465. Leave false for the ordinary STARTTLS submission port."
+      }
+    },
+    "mailSmtpUsername": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SMTP username. Leave empty for a relay that does not authenticate."
+      }
+    },
+    "mailSmtpPassword": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "SMTP password for the username above."
+      }
+    },
+    "enableMicrosoftSso": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Offer \"Sign in with Microsoft\" (Entra ID, OIDC). Requires an app registration in your tenant whose redirect URI is https://<app host>/auth/microsoft/callback."
+      }
+    },
+    "microsoftTenantId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Entra tenant to accept sign-ins from: your Directory (tenant) ID, or \"organizations\" for any work/school account. \"common\" additionally admits personal Microsoft accounts. Read only when Microsoft SSO is enabled."
+      }
+    },
+    "microsoftClientId": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Application (client) ID of the Entra app registration. Required when Microsoft SSO is enabled."
+      }
+    },
+    "microsoftClientSecret": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Client secret of the Entra app registration. Required when Microsoft SSO is enabled."
       }
     },
     "registryServer": {
@@ -540,7 +618,31 @@
       "apiVersion": "2025-05-01",
       "name": "[format('{0}/{1}', variables('keyVaultName'), 'mailpace-api-key')]",
       "properties": {
-        "value": "[parameters('mailpaceApiKey')]"
+        "value": "[if(equals(parameters('mailerAdapter'), 'mailpace'), parameters('mailpaceApiKey'), format('unused-mailer-adapter-{0}', parameters('mailerAdapter')))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('bootstrapSecrets')]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2025-05-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), 'smtp-password')]",
+      "properties": {
+        "value": "[if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), parameters('mailSmtpPassword'), format('unused-mailer-adapter-{0}', parameters('mailerAdapter')))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('bootstrapSecrets')]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2025-05-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), 'microsoft-client-secret')]",
+      "properties": {
+        "value": "[if(parameters('enableMicrosoftSso'), parameters('microsoftClientSecret'), 'unused-microsoft-sso-disabled')]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
@@ -793,6 +895,7 @@
             "value": "[parameters('appSize')]"
           },
           "phxHost": "[if(empty(parameters('customDomain')), createObject('value', format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain)), createObject('value', parameters('customDomain')))]",
+          "checkOrigin": "[if(empty(parameters('customDomain')), createObject('value', format('https://{0}', format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain))), createObject('value', format('https://{0},https://{1}', parameters('customDomain'), format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain))))]",
           "registryServer": {
             "value": "[parameters('registryServer')]"
           },
@@ -840,14 +943,9 @@
               "secretName": "token-signing-secret"
             }
           },
-          "mailpaceApiKey": {
-            "reference": {
-              "keyVault": {
-                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
-              },
-              "secretName": "mailpace-api-key"
-            }
-          },
+          "mailpaceApiKey": "[if(equals(parameters('mailerAdapter'), 'mailpace'), createObject('reference', createObject('keyVault', createObject('id', resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))), 'secretName', 'mailpace-api-key')), createObject('value', ''))]",
+          "mailSmtpPassword": "[if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createObject('reference', createObject('keyVault', createObject('id', resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))), 'secretName', 'smtp-password')), createObject('value', ''))]",
+          "microsoftClientSecret": "[if(parameters('enableMicrosoftSso'), createObject('reference', createObject('keyVault', createObject('id', resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))), 'secretName', 'microsoft-client-secret')), createObject('value', ''))]",
           "llmApiKeyFromKv": {
             "reference": {
               "keyVault": {
@@ -884,11 +982,33 @@
             "value": "[and(parameters('enableAzureAi'), parameters('enableSpeech'))]"
           },
           "speechRegion": "[if(and(parameters('enableAzureAi'), parameters('enableSpeech')), createObject('value', parameters('aiLocation')), createObject('value', ''))]",
+          "mailerAdapter": {
+            "value": "[parameters('mailerAdapter')]"
+          },
           "mailFromEmail": {
             "value": "[parameters('mailFromEmail')]"
           },
           "mailFromName": {
             "value": "[parameters('mailFromName')]"
+          },
+          "mailSmtpRelay": {
+            "value": "[parameters('mailSmtpRelay')]"
+          },
+          "mailSmtpPort": {
+            "value": "[parameters('mailSmtpPort')]"
+          },
+          "mailSmtpSsl": {
+            "value": "[parameters('mailSmtpSsl')]"
+          },
+          "mailSmtpUsername": {
+            "value": "[parameters('mailSmtpUsername')]"
+          },
+          "enableMicrosoftSso": {
+            "value": "[parameters('enableMicrosoftSso')]"
+          },
+          "microsoftTenantId": "[if(empty(parameters('microsoftTenantId')), createObject('value', 'common'), createObject('value', parameters('microsoftTenantId')))]",
+          "microsoftClientId": {
+            "value": "[parameters('microsoftClientId')]"
           }
         },
         "template": {
@@ -898,7 +1018,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "12942436070289758759"
+              "templateHash": "6412580234445209165"
             }
           },
           "parameters": {
@@ -927,6 +1047,9 @@
               }
             },
             "phxHost": {
+              "type": "string"
+            },
+            "checkOrigin": {
               "type": "string"
             },
             "registryServer": {
@@ -958,6 +1081,14 @@
             },
             "mailpaceApiKey": {
               "type": "securestring"
+            },
+            "mailSmtpPassword": {
+              "type": "securestring",
+              "defaultValue": ""
+            },
+            "microsoftClientSecret": {
+              "type": "securestring",
+              "defaultValue": ""
             },
             "llmApiKeyFromKv": {
               "type": "securestring"
@@ -1017,12 +1148,50 @@
               "type": "string",
               "defaultValue": ""
             },
+            "mailerAdapter": {
+              "type": "string",
+              "defaultValue": "mailpace",
+              "allowedValues": [
+                "mailpace",
+                "smtp",
+                "none"
+              ]
+            },
             "mailFromEmail": {
-              "type": "string"
+              "type": "string",
+              "defaultValue": ""
             },
             "mailFromName": {
               "type": "string",
               "defaultValue": "EdSpace"
+            },
+            "mailSmtpRelay": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "mailSmtpPort": {
+              "type": "int",
+              "defaultValue": 587
+            },
+            "mailSmtpSsl": {
+              "type": "bool",
+              "defaultValue": false
+            },
+            "mailSmtpUsername": {
+              "type": "string",
+              "defaultValue": ""
+            },
+            "enableMicrosoftSso": {
+              "type": "bool",
+              "defaultValue": false
+            },
+            "microsoftTenantId": {
+              "type": "string",
+              "defaultValue": "common"
+            },
+            "microsoftClientId": {
+              "type": "string",
+              "defaultValue": ""
             }
           },
           "variables": {
@@ -1060,15 +1229,12 @@
                 "value": "[variables('llmApiKey')]"
               },
               {
-                "name": "mailpace-api-key",
-                "value": "[parameters('mailpaceApiKey')]"
-              },
-              {
                 "name": "registry-password",
                 "value": "[parameters('registryPassword')]"
               }
             ],
-            "secrets": "[concat(variables('baseSecrets'), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'azure-speech-key', 'value', parameters('speechKey')))))]",
+            "mailerSecrets": "[concat(if(and(equals(parameters('mailerAdapter'), 'mailpace'), not(empty(parameters('mailpaceApiKey')))), createArray(createObject('name', 'mailpace-api-key', 'value', parameters('mailpaceApiKey'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpPassword')))), createArray(createObject('name', 'smtp-password', 'value', parameters('mailSmtpPassword'))), createArray()))]",
+            "secrets": "[concat(variables('baseSecrets'), variables('mailerSecrets'), if(and(parameters('enableMicrosoftSso'), not(empty(parameters('microsoftClientSecret')))), createArray(createObject('name', 'microsoft-client-secret', 'value', parameters('microsoftClientSecret'))), createArray()), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'azure-speech-key', 'value', parameters('speechKey')))))]",
             "plainEnv": [
               {
                 "name": "PHX_HOST",
@@ -1076,7 +1242,7 @@
               },
               {
                 "name": "PHX_CHECK_ORIGIN",
-                "value": "[format('https://{0}', parameters('phxHost'))]"
+                "value": "[parameters('checkOrigin')]"
               },
               {
                 "name": "EDSPACE_FILE_STORAGE_ADAPTER",
@@ -1115,8 +1281,8 @@
                 "value": "[if(parameters('speechEnabled'), 'true', 'false')]"
               },
               {
-                "name": "MAILER_FROM_EMAIL",
-                "value": "[parameters('mailFromEmail')]"
+                "name": "MAILER_ADAPTER",
+                "value": "[parameters('mailerAdapter')]"
               },
               {
                 "name": "CHROMIC_PDF_POOL_SIZE",
@@ -1143,13 +1309,9 @@
               {
                 "name": "EDSPACE_LLM_API_KEY",
                 "secretRef": "llm-api-key"
-              },
-              {
-                "name": "MAILPACE_API_KEY",
-                "secretRef": "mailpace-api-key"
               }
             ],
-            "conditionalEnv": "[concat(if(empty(parameters('llmApiVersion')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_API_VERSION', 'value', parameters('llmApiVersion')))), if(empty(parameters('llmTextModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_TEXT_MODEL', 'value', parameters('llmTextModel')))), if(empty(parameters('llmSmallModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_SMALL_MODEL', 'value', parameters('llmSmallModel')))), if(empty(parameters('llmEmbeddingModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_EMBEDDING_MODEL', 'value', parameters('llmEmbeddingModel')))), if(empty(parameters('speechRegion')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_REGION', 'value', parameters('speechRegion')))), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_KEY', 'secretRef', 'azure-speech-key'))), if(empty(parameters('mailFromName')), createArray(), createArray(createObject('name', 'MAILER_FROM_NAME', 'value', parameters('mailFromName')))))]"
+            "conditionalEnv": "[concat(if(empty(parameters('llmApiVersion')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_API_VERSION', 'value', parameters('llmApiVersion')))), if(empty(parameters('llmTextModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_TEXT_MODEL', 'value', parameters('llmTextModel')))), if(empty(parameters('llmSmallModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_SMALL_MODEL', 'value', parameters('llmSmallModel')))), if(empty(parameters('llmEmbeddingModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_EMBEDDING_MODEL', 'value', parameters('llmEmbeddingModel')))), if(empty(parameters('speechRegion')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_REGION', 'value', parameters('speechRegion')))), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_KEY', 'secretRef', 'azure-speech-key'))), if(empty(parameters('mailFromName')), createArray(), createArray(createObject('name', 'MAILER_FROM_NAME', 'value', parameters('mailFromName')))), if(equals(parameters('mailerAdapter'), 'none'), createArray(), createArray(createObject('name', 'MAILER_FROM_EMAIL', 'value', parameters('mailFromEmail')))), if(and(equals(parameters('mailerAdapter'), 'mailpace'), not(empty(parameters('mailpaceApiKey')))), createArray(createObject('name', 'MAILPACE_API_KEY', 'secretRef', 'mailpace-api-key')), createArray()), if(equals(parameters('mailerAdapter'), 'smtp'), createArray(createObject('name', 'MAILER_SMTP_RELAY', 'value', parameters('mailSmtpRelay')), createObject('name', 'MAILER_SMTP_PORT', 'value', string(parameters('mailSmtpPort'))), createObject('name', 'MAILER_SMTP_SSL', 'value', if(parameters('mailSmtpSsl'), 'true', 'false'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createArray(createObject('name', 'MAILER_SMTP_USERNAME', 'value', parameters('mailSmtpUsername'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpPassword')))), createArray(createObject('name', 'MAILER_SMTP_PASSWORD', 'secretRef', 'smtp-password')), createArray()), if(parameters('enableMicrosoftSso'), createArray(createObject('name', 'MICROSOFT_TENANT_ID', 'value', parameters('microsoftTenantId')), createObject('name', 'MICROSOFT_CLIENT_ID', 'value', parameters('microsoftClientId')), createObject('name', 'MICROSOFT_REDIRECT_URI', 'value', format('https://{0}/auth/microsoft/callback', parameters('phxHost'))), createObject('name', 'MICROSOFT_CLIENT_SECRET', 'secretRef', 'microsoft-client-secret')), createArray()))]"
           },
           "resources": [
             {
@@ -1243,10 +1405,12 @@
         "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'llm-api-key')]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'mailpace-api-key')]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'microsoft-client-secret')]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'pg-admin-password')]",
         "[resourceId('Microsoft.Resources/deployments', 'edspace-postgres')]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'registry-password')]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'secret-key-base')]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'smtp-password')]",
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'token-signing-secret')]",
         "[resourceId('Microsoft.Storage/storageAccounts/blobServices/containers', variables('storageAccountName'), 'default', variables('storageContainerName'))]"
@@ -1256,7 +1420,7 @@
   "outputs": {
     "appUrl": {
       "type": "string",
-      "value": "[format('https://{0}', reference(resourceId('Microsoft.Resources/deployments', 'edspace-app'), '2025-04-01').outputs.fqdn.value)]"
+      "value": "[format('https://{0}', if(empty(parameters('customDomain')), format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain), parameters('customDomain')))]"
     },
     "appFqdn": {
       "type": "string",
@@ -1277,6 +1441,10 @@
     "aiAccountName": {
       "type": "string",
       "value": "[if(parameters('enableAzureAi'), variables('aiAccountName'), '')]"
+    },
+    "microsoftRedirectUri": {
+      "type": "string",
+      "value": "[format('https://{0}/auth/microsoft/callback', if(empty(parameters('customDomain')), format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain), parameters('customDomain')))]"
     }
   }
 }

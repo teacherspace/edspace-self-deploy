@@ -1,0 +1,27 @@
+# CI/lint values: SMTP relay instead of MailPace, and the storage/speech
+# shape a school running entirely on its own infrastructure would use.
+# Its sibling case — mailer.adapter=none — is covered by
+# scripts/test-chart-validation.sh, which asserts it installs with no
+# credential and no sender at all.
+app:
+  host: edspace.example.org
+db:
+  host: postgres.internal.example
+  password: ci-dummy-password
+llm:
+  apiKey: ci-dummy-llm-key
+  baseUrl: https://example.openai.azure.com/
+  textDeployment: gpt-5.6-sol
+  smallDeployment: gpt-5.6-luna
+  embeddingDeployment: text-embedding-3-small
+mailer:
+  adapter: smtp
+  fromEmail: noreply@example.org
+  smtp:
+    relay: smtp.internal.example
+    username: edspace
+    password: ci-dummy-smtp-password
+    caCertSecret: internal-smtp-ca
+env:
+  EDSPACE_PLATFORM_ADMINS: admin@example.org
+  MEMBER_PURGE_ENABLED: "false"

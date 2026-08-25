@@ -131,15 +131,54 @@ param byoLlmApiVersion string = ''
 @description('Custom public hostname. Leave empty to use the generated *.azurecontainerapps.io address. Custom domains are bound post-install by EdSpace support (see README).')
 param customDomain string = ''
 
+@description('Transactional-email backend. "none" disables email: sign-in then uses a password and/or SSO, and invitation links are shown to the inviting admin to pass on.')
+@allowed(['mailpace', 'smtp', 'none'])
+param mailerAdapter string = 'mailpace'
+
 @secure()
-@description('MailPace API key. Transactional email is required — invitations and magic-link sign-in depend on it.')
+@description('MailPace API key. Required when the mailer is MailPace.')
 param mailpaceApiKey string = ''
 
-@description('From address for all outgoing email (must be a verified MailPace domain).')
-param mailFromEmail string
+@description('From address for all outgoing email, verified with your provider. Required unless the mailer is "none".')
+param mailFromEmail string = ''
 
 @description('Display name for outgoing email.')
 param mailFromName string = 'EdSpace'
+
+@description('SMTP relay hostname. Required when the mailer is SMTP.')
+param mailSmtpRelay string = ''
+
+@description('SMTP relay port. 587 is the STARTTLS submission port.')
+@minValue(1)
+@maxValue(65535)
+param mailSmtpPort int = 587
+
+@description('Implicit TLS from the first byte, paired with port 465. Leave false for the ordinary STARTTLS submission port.')
+param mailSmtpSsl bool = false
+
+@description('SMTP username. Leave empty for a relay that does not authenticate.')
+param mailSmtpUsername string = ''
+
+@secure()
+@description('SMTP password for the username above.')
+param mailSmtpPassword string = ''
+
+// -------------------------------------------------------------------- sign-in
+// Microsoft Entra ID single sign-on. Off by default: the app boots without any
+// SSO provider and users sign in by magic link / password. Other providers
+// (UniLogin, Praxis) stay CLI-only via the contract's MICROSOFT_/UNILOGIN_ vars.
+@description('Offer "Sign in with Microsoft" (Entra ID, OIDC). Requires an app registration in your tenant whose redirect URI is https://<app host>/auth/microsoft/callback.')
+param enableMicrosoftSso bool = false
+
+@description('Entra tenant to accept sign-ins from: your Directory (tenant) ID, or "organizations" for any work/school account. "common" additionally admits personal Microsoft accounts. Read only when Microsoft SSO is enabled.')
+param microsoftTenantId string = ''
+
+@description('Application (client) ID of the Entra app registration. Required when Microsoft SSO is enabled.')
+param microsoftClientId string = ''
+
+@secure()
+@description('Client secret of the Entra app registration. Required when Microsoft SSO is enabled.')
+param microsoftClientSecret string = ''
 
 // ------------------------------------------------------------------- license
 @description('Container registry host serving the EdSpace image. Leave at the default unless EdSpace support directs otherwise.')
@@ -410,10 +449,37 @@ resource pgAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = 
   properties: { value: 'E1!${replace(pgPasswordSeed, '-', '')}' }
 }
 
+// Both mailer credentials are always created, with a placeholder when the
+// selected adapter does not use them: getSecret() cannot sit behind a
+// conditional at the module call site, and Key Vault rejects an empty value.
 resource mailpaceApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'mailpace-api-key'
-  properties: { value: mailpaceApiKey }
+  // Placeholder ONLY when another adapter is selected. Under 'mailpace' the
+  // real key goes in unmodified, so a CLI deployment that forgot it hits Key
+  // Vault's empty-value rejection and fails here — instead of installing an
+  // app that boots green and then has every message refused by MailPace.
+  properties: { value: mailerAdapter == 'mailpace' ? mailpaceApiKey : 'unused-mailer-adapter-${mailerAdapter}' }
+}
+
+// An SMTP relay on a trusted network may take no credentials at all. Once a
+// username is supplied, however, the real password is written unmodified: an
+// empty value makes Key Vault reject the deployment before a credentialless
+// app revision can be created.
+resource smtpPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
+  parent: keyVault
+  name: 'smtp-password'
+  properties: { value: mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? mailSmtpPassword : 'unused-mailer-adapter-${mailerAdapter}' }
+}
+
+// Same always-created / placeholder-when-disabled pattern as the mailer
+// credentials. Under enableMicrosoftSso the raw value goes in, so a CLI
+// deployment that enabled SSO but forgot the secret fails here on Key Vault's
+// empty-value rejection instead of installing a sign-in button that 400s.
+resource microsoftClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
+  parent: keyVault
+  name: 'microsoft-client-secret'
+  properties: { value: enableMicrosoftSso ? microsoftClientSecret : 'unused-microsoft-sso-disabled' }
 }
 
 resource registryPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
@@ -452,7 +518,15 @@ module postgres 'modules/postgres.bicep' = {
 // ----------------------------------------------------------------------- app
 // PHX_HOST is resolvable before the app exists: the app's fixed name is
 // `edspace`, so its FQDN is edspace.<environment default domain>.
-var phxHost = empty(customDomain) ? 'edspace.${acaEnv.properties.defaultDomain}' : customDomain
+var generatedHost = 'edspace.${acaEnv.properties.defaultDomain}'
+var phxHost = empty(customDomain) ? generatedHost : customDomain
+// A custom domain is bound post-install (see the README runbook), so until
+// then the app is only reachable at the generated address. Allowing both
+// origins keeps the instance usable — WebSockets included — during that
+// cutover; the generated host stays valid afterwards, which is harmless.
+var checkOrigin = empty(customDomain)
+  ? 'https://${generatedHost}'
+  : 'https://${customDomain},https://${generatedHost}'
 
 module app 'modules/containerApp.bicep' = {
   name: 'edspace-app'
@@ -463,6 +537,7 @@ module app 'modules/containerApp.bicep' = {
     containerImage: containerImage
     appSize: appSize
     phxHost: phxHost
+    checkOrigin: checkOrigin
 
     registryServer: registryServer
     registryUsername: registryUsername
@@ -475,7 +550,9 @@ module app 'modules/containerApp.bicep' = {
 
     secretKeyBase: keyVault.getSecret('secret-key-base')
     tokenSigningSecret: keyVault.getSecret('token-signing-secret')
-    mailpaceApiKey: keyVault.getSecret('mailpace-api-key')
+    mailpaceApiKey: mailerAdapter == 'mailpace' ? keyVault.getSecret('mailpace-api-key') : ''
+    mailSmtpPassword: mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? keyVault.getSecret('smtp-password') : ''
+    microsoftClientSecret: enableMicrosoftSso ? keyVault.getSecret('microsoft-client-secret') : ''
     llmApiKeyFromKv: keyVault.getSecret('llm-api-key')
     // BCP422: lazy if() — listKeys only evaluates when enableAzureAi is true,
     // so the conditional resource is guaranteed to exist at call time.
@@ -509,14 +586,27 @@ module app 'modules/containerApp.bicep' = {
     speechEnabled: enableAzureAi && enableSpeech
     speechRegion: enableAzureAi && enableSpeech ? aiLocation : ''
 
+    mailerAdapter: mailerAdapter
     mailFromEmail: mailFromEmail
     mailFromName: mailFromName
+    mailSmtpRelay: mailSmtpRelay
+    mailSmtpPort: mailSmtpPort
+    mailSmtpSsl: mailSmtpSsl
+    mailSmtpUsername: mailSmtpUsername
+
+    enableMicrosoftSso: enableMicrosoftSso
+    // The app itself defaults to "common"; an explicit fallback here keeps the
+    // CLI path from emitting an empty MICROSOFT_TENANT_ID.
+    microsoftTenantId: empty(microsoftTenantId) ? 'common' : microsoftTenantId
+    microsoftClientId: microsoftClientId
   }
   dependsOn: [
     secretKeyBaseSecret
     tokenSigningSecret
     pgAdminPasswordSecret
     mailpaceApiKeySecret
+    smtpPasswordSecret
+    microsoftClientSecretSecret
     registryPasswordSecret
     llmApiKeySecret
     aiModelDeployments
@@ -525,9 +615,17 @@ module app 'modules/containerApp.bicep' = {
 }
 
 // ------------------------------------------------------------------- outputs
-output appUrl string = 'https://${app.outputs.fqdn}'
+// appUrl is where the customer signs in: the custom domain once it is
+// bound, or the generated address. appFqdn is always the generated ACA
+// address — it is the CNAME target of the custom-domain runbook, and the
+// fallback URL while the custom domain is still being bound.
+output appUrl string = 'https://${phxHost}'
 output appFqdn string = app.outputs.fqdn
 output postgresFqdn string = postgres.outputs.fqdn
 output storageAccountName string = storage.name
 output keyVaultName string = keyVault.name
 output aiAccountName string = enableAzureAi ? aiAccountName : ''
+// Always emitted so a customer enabling SSO later knows the exact URI to
+// register; MICROSOFT_REDIRECT_URI in the app is set from the same host, so
+// the two can never disagree (with a custom domain this is the custom host).
+output microsoftRedirectUri string = 'https://${phxHost}/auth/microsoft/callback'

@@ -234,7 +234,7 @@
             "type": "Microsoft.Common.TextBox",
             "label": "Custom domain (optional)",
             "placeholder": "edspace.myschool.example",
-            "toolTip": "Leave empty to use the generated *.azurecontainerapps.io address. Custom domains are activated after installation by EdSpace support — until DNS is configured and the domain is bound, the app will NOT be reachable at the generated address (it only accepts its configured hostname). See the installation guide.",
+            "toolTip": "Leave empty to use the generated *.azurecontainerapps.io address. Custom domains are activated after installation by EdSpace support. Until DNS is configured and the domain is bound, use the generated address shown as the appFqdn output; generated links and the Microsoft sign-in redirect already use the custom domain. See the installation guide.",
             "constraints": {
               "required": false,
               "regex": "^$|^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",
@@ -242,12 +242,28 @@
             }
           },
           {
+            "name": "mailerAdapter",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Transactional email",
+            "defaultValue": "MailPace",
+            "toolTip": "EdSpace only emails about getting into an account: magic-link sign-in, password reset and invitations. Choose 'No email' if your users all sign in through SSO — the app then offers a password form, and invitation links are shown to the inviting admin to pass on.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "MailPace", "value": "mailpace" },
+                { "label": "SMTP relay", "value": "smtp" },
+                { "label": "No email (SSO / password sign-in only)", "value": "none" }
+              ],
+              "required": true
+            }
+          },
+          {
             "name": "mailFromEmail",
             "type": "Microsoft.Common.TextBox",
             "label": "Email from address",
-            "toolTip": "Sender for transactional email; must be verified in your MailPace account.",
+            "visible": "[not(equals(steps('application').mailerAdapter, 'none'))]",
+            "toolTip": "Sender address for transactional email. It must be verified with your provider, or messages are rejected.",
             "constraints": {
-              "required": true,
+              "required": "[or(equals(steps('application').mailerAdapter, 'mailpace'), equals(steps('application').mailerAdapter, 'smtp'))]",
               "regex": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
               "validationMessage": "Enter a valid email address."
             }
@@ -257,6 +273,7 @@
             "type": "Microsoft.Common.TextBox",
             "label": "Email from name",
             "defaultValue": "EdSpace",
+            "visible": "[not(equals(steps('application').mailerAdapter, 'none'))]",
             "toolTip": "Display name shown as the sender of EdSpace's emails.",
             "constraints": {
               "required": false,
@@ -268,8 +285,121 @@
             "name": "mailpaceApiKey",
             "type": "Microsoft.Common.PasswordBox",
             "label": { "password": "MailPace API key", "confirmPassword": "Confirm MailPace API key" },
+            "visible": "[equals(steps('application').mailerAdapter, 'mailpace')]",
             "toolTip": "EdSpace sends transactional email through MailPace (mailpace.com).",
-            "constraints": { "required": true }
+            "constraints": { "required": "[equals(steps('application').mailerAdapter, 'mailpace')]" }
+          },
+          {
+            "name": "mailSmtpRelay",
+            "type": "Microsoft.Common.TextBox",
+            "label": "SMTP relay host",
+            "visible": "[equals(steps('application').mailerAdapter, 'smtp')]",
+            "placeholder": "smtp.myschool.example",
+            "toolTip": "Hostname of the relay. EdSpace always encrypts the session and verifies the relay's certificate.",
+            "constraints": {
+              "required": "[equals(steps('application').mailerAdapter, 'smtp')]",
+              "regex": "^$|^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\\.[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?)+$",
+              "validationMessage": "Enter a valid hostname, e.g. smtp.myschool.example."
+            }
+          },
+          {
+            "name": "mailSmtpSecurity",
+            "type": "Microsoft.Common.DropDown",
+            "label": "SMTP security",
+            "defaultValue": "STARTTLS on port 587 (recommended)",
+            "visible": "[equals(steps('application').mailerAdapter, 'smtp')]",
+            "toolTip": "This only picks how encryption starts — the session is encrypted and the certificate verified either way. Use 587 unless your relay offers only implicit TLS.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "STARTTLS on port 587 (recommended)", "value": 587 },
+                { "label": "Implicit TLS on port 465", "value": 465 }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "mailSmtpUsername",
+            "type": "Microsoft.Common.TextBox",
+            "label": "SMTP username (optional)",
+            "visible": "[equals(steps('application').mailerAdapter, 'smtp')]",
+            "toolTip": "Leave empty for a relay that accepts mail without authentication. Setting it makes authentication mandatory.",
+            "constraints": {
+              "required": false,
+              "regex": "^$|^[^\\s]{1,128}$",
+              "validationMessage": "Up to 128 characters, without spaces."
+            }
+          },
+          {
+            "name": "mailSmtpPassword",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": { "password": "SMTP password", "confirmPassword": "Confirm SMTP password" },
+            "visible": "[equals(steps('application').mailerAdapter, 'smtp')]",
+            "toolTip": "Password for the SMTP username above. Leave empty only if the relay takes no credentials.",
+            "constraints": { "required": "[and(equals(steps('application').mailerAdapter, 'smtp'), not(empty(steps('application').mailSmtpUsername)))]" }
+          }
+        ]
+      },
+      {
+        "name": "signin",
+        "label": "Sign-in",
+        "elements": [
+          {
+            "name": "enableMicrosoftSso",
+            "type": "Microsoft.Common.OptionsGroup",
+            "label": "Microsoft Entra ID sign-in",
+            "defaultValue": "Off",
+            "toolTip": "Adds a 'Sign in with Microsoft' button. Users are matched to EdSpace accounts by email (or by Entra object id when provisioned over SCIM). Can also be enabled later with 'az containerapp update'.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Off", "value": false },
+                { "label": "On (Entra ID / OIDC)", "value": true }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "registrationInfo",
+            "type": "Microsoft.Common.InfoBox",
+            "visible": "[steps('signin').enableMicrosoftSso]",
+            "options": {
+              "icon": "Info",
+              "text": "[concat('In Entra admin center create an App registration (Web platform) and a client secret. Register the redirect URI ', if(empty(steps('application').customDomain), 'https://<generated host>/auth/microsoft/callback — the generated host is shown as the microsoftRedirectUri deployment output once this deployment finishes; add it to the app registration then', concat('https://', steps('application').customDomain, '/auth/microsoft/callback')), '. Under Token configuration add the optional \"email\" claim and grant the openid, profile and email permissions.')]",
+              "uri": "https://learn.microsoft.com/entra/identity-platform/quickstart-register-app"
+            }
+          },
+          {
+            "name": "microsoftTenantId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Directory (tenant) ID",
+            "visible": "[steps('signin').enableMicrosoftSso]",
+            "placeholder": "00000000-0000-0000-0000-000000000000",
+            "toolTip": "Your Entra tenant's Directory (tenant) ID, from the app registration's Overview page — only accounts in this tenant can sign in. Enter 'organizations' to accept any work or school account (multi-tenant registration required).",
+            "constraints": {
+              "required": "[steps('signin').enableMicrosoftSso]",
+              "regex": "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$|^organizations$",
+              "validationMessage": "Enter the tenant GUID, or 'organizations'."
+            }
+          },
+          {
+            "name": "microsoftClientId",
+            "type": "Microsoft.Common.TextBox",
+            "label": "Application (client) ID",
+            "visible": "[steps('signin').enableMicrosoftSso]",
+            "placeholder": "00000000-0000-0000-0000-000000000000",
+            "toolTip": "The Application (client) ID from the app registration's Overview page.",
+            "constraints": {
+              "required": "[steps('signin').enableMicrosoftSso]",
+              "regex": "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$",
+              "validationMessage": "Enter the application (client) ID GUID."
+            }
+          },
+          {
+            "name": "microsoftClientSecret",
+            "type": "Microsoft.Common.PasswordBox",
+            "label": { "password": "Client secret", "confirmPassword": "Confirm client secret" },
+            "visible": "[steps('signin').enableMicrosoftSso]",
+            "toolTip": "The secret's Value (not its Secret ID) from Certificates & secrets. It is stored in the instance Key Vault. Note the expiry you chose — rotate it before then with 'az containerapp secret set'.",
+            "constraints": { "required": "[steps('signin').enableMicrosoftSso]" }
           }
         ]
       },
@@ -329,6 +459,16 @@
       "mailFromEmail": "[steps('application').mailFromEmail]",
       "mailFromName": "[steps('application').mailFromName]",
       "mailpaceApiKey": "[steps('application').mailpaceApiKey]",
+      "mailerAdapter": "[steps('application').mailerAdapter]",
+      "mailSmtpRelay": "[steps('application').mailSmtpRelay]",
+      "mailSmtpPort": "[steps('application').mailSmtpSecurity]",
+      "mailSmtpSsl": "[equals(steps('application').mailSmtpSecurity, 465)]",
+      "mailSmtpUsername": "[steps('application').mailSmtpUsername]",
+      "mailSmtpPassword": "[steps('application').mailSmtpPassword]",
+      "enableMicrosoftSso": "[steps('signin').enableMicrosoftSso]",
+      "microsoftTenantId": "[if(steps('signin').enableMicrosoftSso, steps('signin').microsoftTenantId, '')]",
+      "microsoftClientId": "[if(steps('signin').enableMicrosoftSso, steps('signin').microsoftClientId, '')]",
+      "microsoftClientSecret": "[if(steps('signin').enableMicrosoftSso, steps('signin').microsoftClientSecret, '')]",
       "registryUsername": "[steps('license').registryUsername]",
       "registryPassword": "[steps('license').registryPassword]",
       "bootstrapSecrets": true

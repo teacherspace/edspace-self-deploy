@@ -30,8 +30,9 @@ updates for you (update with `az containerapp update --image <new tag>`).
 You will need:
 
 - the `edspace.azurecr.io` registry credentials from your EdSpace welcome email,
-- a [MailPace](https://mailpace.com) API key (transactional email is required),
+- a [MailPace](https://mailpace.com) API key, if you want the managed app to send transactional email (the Helm and Compose paths can also use an SMTP relay, or run with email disabled — see [docs/configuration.md](docs/configuration.md#transactional-email)),
 - if enabling Azure AI: available Azure OpenAI GlobalStandard quota in the AI region you pick.
+- if enabling Microsoft sign-in: an Entra app registration (tenant ID, client ID, client secret) — the form's *Sign-in* step explains the redirect URI to register; details in [marketplace/azure/managed-app/README.md](marketplace/azure/managed-app/README.md#deploy-from-the-cli-self-managed).
 
 What gets deployed into your resource group:
 
@@ -44,18 +45,23 @@ What gets deployed into your resource group:
 
 After deployment succeeds:
 
-1. Open the deployment's **Outputs** tab — `appUrl` is your instance's address (verify `GET /health` returns `ok`).
+1. Open the deployment's **Outputs** tab — `appUrl` is your instance's address (verify `GET /health` returns `ok`). If you set a custom domain, use `https://<appFqdn>` until EdSpace support has bound the domain; both addresses are accepted.
 2. Bootstrap the first admin (no self-service signup exists — a fresh install has no account that can log in):
 
    ```sh
    az containerapp update -n edspace -g <resource-group> \
      --set-env-vars "EDSPACE_PLATFORM_ADMINS=admin@your-school.example"
    az containerapp exec -n edspace -g <resource-group> \
-     --command 'bin/edspace rpc "Edspace.Accounts.AdminReconcilerWorker.enqueue()"'
+     --command 'bin/edspace rpc "Edspace.Accounts.AdminReconciler.bootstrap() |> IO.inspect(pretty: true)"'
    ```
 
-   Then sign in at `appUrl` with that email (magic link — this is why MailPace must work). Full onboarding details: [CLIENT_GUIDE.md](CLIENT_GUIDE.md#manual-user-creation).
-3. To update later: `az containerapp update -n edspace -g <resource-group> --image edspace.azurecr.io/edspace/edspace:<new tag>`.
+   Then sign in at `appUrl` with that email. With MailPace or SMTP configured,
+   enter the address on `/sign-in` to request a magic link. With **No email**,
+   copy the returned `onboarding_links` URL over a trusted channel; it is valid
+   for seven days and asks the admin to set a password. Full onboarding details:
+   [CLIENT_GUIDE.md](CLIENT_GUIDE.md#manual-user-creation).
+3. If you enabled Microsoft sign-in, make sure the `microsoftRedirectUri` output is registered in the Entra app registration's redirect URIs — the button will not work until it matches.
+4. To update later: `az containerapp update -n edspace -g <resource-group> --image edspace.azurecr.io/edspace/edspace:<new tag>`.
 
 Prefer the CLI over the portal? See "Deploy from the CLI" in
 [`marketplace/azure/managed-app/README.md`](marketplace/azure/managed-app/README.md),
@@ -99,7 +105,7 @@ and explicit secrets before production — see [docs/install-kubernetes.md](docs
 cd compose
 cp .env.example .env
 ../scripts/generate-secrets.sh >> .env   # fills SECRET_KEY_BASE, POSTGRES_PASSWORD etc.
-$EDITOR .env                              # set PHX_HOST, EDSPACE_IMAGE_TAG, LLM + MailPace keys
+$EDITOR .env                              # set PHX_HOST, EDSPACE_IMAGE_TAG, LLM key, MAILER_*
 docker compose up -d
 ```
 

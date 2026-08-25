@@ -5,10 +5,18 @@
 #   - compose/.env.example
 #   - chart/edspace/values.schema.json (env/envSecret passthrough validation)
 #   - docs/env-vars.md
+#   - config/conditional-requirements.json (packaging requirement predicates)
 #
 # Field reference:
 #   type:     string | integer | boolean | enum   (wire format is always a string)
 #   required: bool, or {chart: bool, compose: bool} for per-context requiredness
+#             — "required for that context's DEFAULT configuration", which is
+#             what .env.example renders uncommented
+#   required_when: structured conditional requirement with a human description
+#             plus a machine-readable condition. Conditions use `var` with one
+#             of `equals`, `one_of`, or `present`, nest via `all` / `any`, or
+#             name a declared deployment context. Cannot be combined with a
+#             flat `required: true`.
 #   secret:   true -> must live in a Secret / PasswordBox, never a ConfigMap or plain env
 #   default:  scalar (app compiled-in), or {app:, chart:, compose:} when packaging overrides
 #   tier:     core     -> shown uncommented in .env.example; primary docs
@@ -42,6 +50,8 @@ categories:
     title: Mailer
   - id: auth
     title: Authentication / OIDC
+  - id: retention
+    title: Member retention & purge
   - id: pdf
     title: PDF export
   - id: telemetry
@@ -52,6 +62,73 @@ categories:
     title: BEAM / OS tuning
   - id: deploy
     title: Deployment settings (not read by the app)
+
+requirement_contexts:
+  first_admin_bootstrap: >-
+    A fresh database has no platform admin yet, so an operator must seed the
+    first one out of band before the backoffice is reachable.
+
+# Variables the application reads that are deliberately OUTSIDE the customer
+# contract, each with the reason. `scripts/check-contract-parity.py` reads this
+# list so it can tell an intentional omission from drift — when the app grows a
+# variable, it either lands in `vars:` below or gets a line here.
+#
+# A customer who genuinely needs one of these supplies it through the chart's
+# extraEnv/extraEnvFrom (or straight into compose/.env), which bypass the
+# contract's schema validation by design.
+excluded:
+  - prefix: ALICE_
+    reason: >-
+      Alice (L&R/Alinea licence system) roster-sync credentials and tuning.
+      EdSpace-operated integration; values are issued during onboarding and
+      the integration is inert without them.
+  - prefix: ALINEA_
+    reason: >-
+      Alinea publisher SSO and licence service. Same posture as ALICE_ —
+      EdSpace-configured, per-environment, not a customer setting.
+  - prefix: LINEAR_
+    reason: In-app feedback push to EdSpace's own Linear workspace.
+  - prefix: DD_
+    reason: >-
+      Datadog APM/RUM for EdSpace-operated environments. A self-hosting
+      customer collects the app's stdout JSON logs and OTLP traces instead.
+  - prefix: EDSPACE_DD_
+    reason: DogStatsD/OTLP transport details for the Datadog agent above.
+  - prefix: TEACHERSPACE_SOURCE_
+    reason: >-
+      Read-only connection to a restored copy of the legacy Teacherspace
+      database, used only by the one-time data migration.
+  - name: GIT_SHA
+    reason: Build-stamp fallback for the Datadog RUM release version.
+  - name: MIX_TEST_PARTITION
+    reason: Test-suite only.
+  - name: TEST_DB_POOL_SIZE
+    reason: Test-suite only.
+  # Product-behaviour settings managed inside the application itself. The
+  # app still reads these as boot-time defaults, but they are not deployment
+  # configuration and are kept out of every customer surface on purpose.
+  - prefix: EDSPACE_CHAT_TOOLS_
+    reason: In-app setting.
+  - name: EDSPACE_FAIR_USE_MONTHLY_TOKENS_PER_USER
+    reason: In-app setting.
+  - name: MEMBER_PURGE_GLOBAL_CAP
+    reason: In-app setting.
+  - name: MEMBER_PURGE_STALE_SYNC_HOURS
+    reason: In-app setting.
+  - name: MEMBER_PURGE_RETENTION_NOTICE_DAYS
+    reason: In-app setting.
+  - name: MEMBER_PURGE_ABANDON_AFTER_MINUTES
+    reason: In-app setting.
+  - name: EDSPACE_SPEECH_VOICE
+    reason: In-app setting.
+  - name: EDSPACE_SPEECH_RECOGNITION_LANGUAGE
+    reason: In-app setting.
+  - name: EDSPACE_SPEECH_RECOGNITION_LANGUAGES
+    reason: In-app setting.
+  - name: DEBUG_AUTH_FAILURES
+    reason: >-
+      Logs personal data; enabled in-app for a time-boxed window, not by
+      deployment configuration.
 
 vars:
   # ---------------------------------------------------------------- phoenix
@@ -540,7 +617,8 @@ vars:
     category: speech
     description: >-
       Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings
-      when enabled; set to "false" when no Azure Speech resource is available.
+      when enabled; the packaging sets it to "false" until an Azure Speech
+      resource is provided.
     type: boolean
     default: { app: true, chart: false, compose: false }
     required: false
@@ -576,44 +654,45 @@ vars:
     tier: advanced
     source: user
 
-  - name: EDSPACE_SPEECH_RECOGNITION_LANGUAGE
-    category: speech
-    description: Primary speech-to-text language.
-    type: string
-    default: { app: da-DK }
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_SPEECH_RECOGNITION_LANGUAGES
-    category: speech
-    description: Comma-separated set of languages offered for speech-to-text.
-    type: string
-    default: { app: "da-DK,en-US,de-DE,fr-FR,es-ES,it-IT" }
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
-  - name: EDSPACE_SPEECH_VOICE
-    category: speech
-    description: Default text-to-speech voice.
-    type: string
-    default: { app: da-DK-ChristelNeural }
-    required: false
-    secret: false
-    tier: advanced
-    source: user
-
   # ----------------------------------------------------------------- mailer
+  # Transactional email is OPTIONAL. EdSpace sends exactly three messages, all
+  # about getting into an account (magic-link sign-in, password reset,
+  # invitation), so a deployment that provisions its users over SSO or a roster
+  # feed can run with MAILER_ADAPTER=none. Every mode validates its own inputs
+  # and raises at boot rather than dropping sign-in links at runtime.
+  - name: MAILER_ADAPTER
+    category: mailer
+    description: >-
+      Transactional-email backend. "mailpace" uses the MailPace HTTP API,
+      "smtp" any SMTP relay, "none" disables email entirely — sign-in then
+      uses passwords and/or SSO, and invitation links are shown to the
+      inviting admin to pass on by hand.
+    type: enum
+    enum: [mailpace, smtp, none]
+    default: { app: mailpace }
+    required: false
+    secret: false
+    tier: core
+    source: user
+    notes: >-
+      The app also accepts "local" (Swoosh's in-memory /dev/mailbox), which is
+      refused in production and therefore not offered here.
+
   - name: MAILER_FROM_EMAIL
     category: mailer
     description: >-
-      From address for transactional email. Must be a sender verified in
-      your MailPace account.
+      From address for transactional email. Must be a sender address verified
+      with the provider — MailPace rejects every message otherwise, and most
+      relays refuse the envelope.
     type: string
-    required: true
+    required: { chart: false, compose: true }
+    required_when:
+      description: >-
+        MAILER_ADAPTER is "mailpace" or "smtp" (blank counts as missing and
+        fails at boot); not read with "none"
+      condition:
+        var: MAILER_ADAPTER
+        one_of: [mailpace, smtp]
     secret: false
     tier: core
     source: user
@@ -631,14 +710,158 @@ vars:
 
   - name: MAILPACE_API_KEY
     category: mailer
-    description: >-
-      MailPace API token. Required — the app refuses to boot in production
-      without it. MailPace is currently the only supported email provider
-      (see docs/limitations.md).
+    description: MailPace API token.
     type: string
-    required: true
+    required: { chart: false, compose: true }
+    required_when:
+      description: MAILER_ADAPTER=mailpace (the default)
+      condition: { var: MAILER_ADAPTER, equals: mailpace }
     secret: true
     tier: core
+    source: user
+
+  - name: MAILER_SMTP_RELAY
+    category: mailer
+    description: SMTP relay hostname. Configured explicitly, so no MX lookup is done on it.
+    type: string
+    required: false
+    required_when:
+      description: MAILER_ADAPTER=smtp
+      condition: { var: MAILER_ADAPTER, equals: smtp }
+    secret: false
+    tier: core
+    source: user
+    example: smtp.school.example
+
+  - name: MAILER_SMTP_PORT
+    category: mailer
+    description: >-
+      SMTP relay port. 587 is the STARTTLS submission port; use 465 together
+      with MAILER_SMTP_SSL=true for implicit TLS.
+    type: integer
+    default: { app: 587 }
+    required: false
+    secret: false
+    tier: core
+    source: user
+
+  - name: MAILER_SMTP_USERNAME
+    category: mailer
+    description: >-
+      SMTP username. Setting it flips MAILER_SMTP_AUTH to "always" — a relay
+      given credentials is expected to use them.
+    type: string
+    required: false
+    secret: false
+    tier: core
+    source: user
+
+  - name: MAILER_SMTP_PASSWORD
+    category: mailer
+    description: SMTP password for MAILER_SMTP_USERNAME.
+    type: string
+    required: false
+    required_when:
+      description: >-
+        MAILER_ADAPTER=smtp and MAILER_SMTP_USERNAME is set (blank counts as
+        missing)
+      condition:
+        all:
+          - { var: MAILER_ADAPTER, equals: smtp }
+          - { var: MAILER_SMTP_USERNAME, present: true }
+    secret: true
+    tier: core
+    source: user
+
+  - name: MAILER_SMTP_SSL
+    category: mailer
+    description: >-
+      Implicit TLS from the first byte, usually on port 465. Leave false for
+      the ordinary STARTTLS submission port.
+    type: boolean
+    default: { app: false }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: MAILER_SMTP_TLS
+    category: mailer
+    description: >-
+      STARTTLS policy. Mandatory by default: with "if_available" a relay that
+      does not advertise STARTTLS — or anyone in the middle stripping the
+      capability — gets the session in cleartext, credentials and sign-in
+      links included. Set "never" only for a relay on a trusted network.
+    type: enum
+    enum: [always, never, if_available]
+    default: { app: always }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+    notes: >-
+      The default flips to "never" when MAILER_SMTP_SSL=true, where the
+      session is already encrypted and STARTTLS is never offered.
+
+  - name: MAILER_SMTP_AUTH
+    category: mailer
+    description: >-
+      SMTP authentication policy. Defaults to "always" when
+      MAILER_SMTP_USERNAME is set and "if_available" when it is not.
+    type: enum
+    enum: [always, never, if_available]
+    default: { app: if_available }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: MAILER_SMTP_TLS_VERIFY
+    category: mailer
+    description: >-
+      Verify the relay's TLS certificate against the OS trust store. Setting
+      it false disables verification entirely — only safe for a relay you
+      control on a trusted network, never across the public internet.
+    type: boolean
+    default: { app: true }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: MAILER_SMTP_CACERTFILE
+    category: mailer
+    description: >-
+      Path to a PEM CA bundle to verify the relay against, for an internal CA
+      or an image without an OS trust store. Boot fails if the path does not
+      exist.
+    type: string
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+    example: /etc/ssl/certs/internal-ca.pem
+
+  - name: MAILER_SMTP_NO_MX_LOOKUPS
+    category: mailer
+    description: >-
+      Skip the MX lookup on MAILER_SMTP_RELAY. Set false only if you really
+      pointed it at a domain rather than a host.
+    type: boolean
+    default: { app: true }
+    required: false
+    secret: false
+    tier: advanced
+    source: user
+
+  - name: MAILER_SMTP_RETRIES
+    category: mailer
+    description: gen_smtp connection retries per message.
+    type: integer
+    default: { app: 1 }
+    required: false
+    secret: false
+    tier: internal
     source: user
 
   # ------------------------------------------------------------------- auth
@@ -738,7 +961,11 @@ vars:
 
   - name: MICROSOFT_BASE_URL
     category: auth
-    description: Microsoft identity platform base URL override.
+    description: >-
+      Microsoft identity platform base URL. Unset, the app derives
+      "https://login.microsoftonline.com/<MICROSOFT_TENANT_ID>/v2.0" from
+      MICROSOFT_TENANT_ID; set this only for a cloud whose endpoint differs
+      (US Gov, China 21Vianet) or an internal proxy.
     type: string
     required: false
     secret: false
@@ -799,13 +1026,38 @@ vars:
     tier: advanced
     source: user
 
-  - name: DEBUG_AUTH_FAILURES
+  - name: EDSPACE_PLATFORM_ADMINS
     category: auth
     description: >-
-      Set to "true" to log detailed SSO failure reasons. WARNING - logs may
-      then contain personal data; enable only while troubleshooting.
+      Comma-separated emails granted platform-admin on reconciliation. This is
+      the first-admin bootstrap: a fresh install has no account that can reach
+      the backoffice, so set this and then run
+      `bin/edspace rpc 'Edspace.Accounts.AdminReconciler.bootstrap() |>
+      IO.inspect(pretty: true)'` inside the app container. With email disabled,
+      the result contains onboarding links to hand over securely. Additive only
+      — it never demotes an existing admin. Read on the serving node.
+    type: string
+    required: false
+    required_when:
+      description: bootstrapping the first platform admin on a fresh install
+      condition: { context: first_admin_bootstrap }
+    secret: false
+    tier: core
+    source: user
+    example: admin@school.example,head@school.example
+
+  # ------------------------------------------------------------- retention
+  # Only the kill switch is deployment configuration, as break-glass:
+  # stopping an irreversible deletion must not depend on the app's own DB
+  # write path being healthy.
+  - name: MEMBER_PURGE_ENABLED
+    category: retention
+    description: >-
+      Deployment-side kill switch for the nightly member-purge sweep. Set
+      "false" to stop it without a deploy — the worker then discards, and
+      nothing inside the application can re-enable it.
     type: boolean
-    default: { app: false }
+    default: { app: true }
     required: false
     secret: false
     tier: advanced
@@ -897,12 +1149,24 @@ vars:
 
   - name: LANGFUSE_BASE_URL
     category: telemetry
-    description: Langfuse REST API base URL; defaults to LANGFUSE_HOST.
+    description: >-
+      Langfuse REST API base URL — the read/query side (prompt fetches, usage
+      and fair-use lookups), separate from the OTLP span exporter. Falls back
+      to LANGFUSE_HOST, so one host variable can drive both the push and pull
+      paths, and then to Langfuse's public cloud: an install that sets
+      LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY without either host variable
+      sends its queries to cloud.langfuse.com. Point this at your own
+      instance, or leave all three unset.
     type: string
+    default:
+      app: https://cloud.langfuse.com
     required: false
     secret: false
     tier: advanced
     source: user
+    notes: >-
+      Trace export is unaffected — it activates only when LANGFUSE_HOST is set
+      alongside both keys.
 
   - name: LANGFUSE_BASEURL
     category: telemetry
@@ -934,9 +1198,12 @@ vars:
 
   - name: LANGFUSE_TIMEOUT
     category: telemetry
-    description: Langfuse REST client timeout (ms).
-    type: integer
-    default: { app: 5000 }
+    description: >-
+      Langfuse REST client timeout in SECONDS — integer or float, not
+      milliseconds. The effective default is 5 seconds; a value like 5000
+      would mean 5000 seconds, and a non-numeric value raises.
+    type: string
+    default: { app: 5 }
     required: false
     secret: false
     tier: internal

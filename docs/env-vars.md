@@ -59,21 +59,29 @@ Variables marked *managed* are composed by the deployment packaging
 
 | Variable | Required | Default | Secret | Description |
 |---|---|---|---|---|
-| `EDSPACE_SPEECH_ENABLED` | no | true |  | Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; set to "false" when no Azure Speech resource is available. |
+| `EDSPACE_SPEECH_ENABLED` | no | true |  | Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; the packaging sets it to "false" until an Azure Speech resource is provided. |
 | `AZURE_SPEECH_KEY` | no |  | yes | Azure Cognitive Services Speech API key. |
 | `AZURE_SPEECH_REGION` | no |  |  | Azure Speech resource region. |
 | `AZURE_SPEECH_ENDPOINT` | no |  |  | Azure Speech endpoint override. |
-| `EDSPACE_SPEECH_RECOGNITION_LANGUAGE` | no | da-DK |  | Primary speech-to-text language. |
-| `EDSPACE_SPEECH_RECOGNITION_LANGUAGES` | no | da-DK,en-US,de-DE,fr-FR,es-ES,it-IT |  | Comma-separated set of languages offered for speech-to-text. |
-| `EDSPACE_SPEECH_VOICE` | no | da-DK-ChristelNeural |  | Default text-to-speech voice. |
 
 ## Mailer
 
 | Variable | Required | Default | Secret | Description |
 |---|---|---|---|---|
-| `MAILER_FROM_EMAIL` | yes |  |  | From address for transactional email. Must be a sender verified in your MailPace account. |
+| `MAILER_ADAPTER` | no | mailpace |  | Transactional-email backend. "mailpace" uses the MailPace HTTP API, "smtp" any SMTP relay, "none" disables email entirely — sign-in then uses passwords and/or SSO, and invitation links are shown to the inviting admin to pass on by hand. The app also accepts "local" (Swoosh's in-memory /dev/mailbox), which is refused in production and therefore not offered here. One of: `mailpace`, `smtp`, `none`. |
+| `MAILER_FROM_EMAIL` | conditional |  |  | From address for transactional email. Must be a sender address verified with the provider — MailPace rejects every message otherwise, and most relays refuse the envelope. **Required when** MAILER_ADAPTER is "mailpace" or "smtp" (blank counts as missing and fails at boot); not read with "none". |
 | `MAILER_FROM_NAME` | no | EdSpace |  | From display name for transactional email. |
-| `MAILPACE_API_KEY` | yes |  | yes | MailPace API token. Required — the app refuses to boot in production without it. MailPace is currently the only supported email provider (see docs/limitations.md). |
+| `MAILPACE_API_KEY` | conditional |  | yes | MailPace API token. **Required when** MAILER_ADAPTER=mailpace (the default). |
+| `MAILER_SMTP_RELAY` | conditional |  |  | SMTP relay hostname. Configured explicitly, so no MX lookup is done on it. **Required when** MAILER_ADAPTER=smtp. |
+| `MAILER_SMTP_PORT` | no | 587 |  | SMTP relay port. 587 is the STARTTLS submission port; use 465 together with MAILER_SMTP_SSL=true for implicit TLS. |
+| `MAILER_SMTP_USERNAME` | no |  |  | SMTP username. Setting it flips MAILER_SMTP_AUTH to "always" — a relay given credentials is expected to use them. |
+| `MAILER_SMTP_PASSWORD` | conditional |  | yes | SMTP password for MAILER_SMTP_USERNAME. **Required when** MAILER_ADAPTER=smtp and MAILER_SMTP_USERNAME is set (blank counts as missing). |
+| `MAILER_SMTP_SSL` | no | false |  | Implicit TLS from the first byte, usually on port 465. Leave false for the ordinary STARTTLS submission port. |
+| `MAILER_SMTP_TLS` | no | always |  | STARTTLS policy. Mandatory by default: with "if_available" a relay that does not advertise STARTTLS — or anyone in the middle stripping the capability — gets the session in cleartext, credentials and sign-in links included. Set "never" only for a relay on a trusted network. The default flips to "never" when MAILER_SMTP_SSL=true, where the session is already encrypted and STARTTLS is never offered. One of: `always`, `never`, `if_available`. |
+| `MAILER_SMTP_AUTH` | no | if_available |  | SMTP authentication policy. Defaults to "always" when MAILER_SMTP_USERNAME is set and "if_available" when it is not. One of: `always`, `never`, `if_available`. |
+| `MAILER_SMTP_TLS_VERIFY` | no | true |  | Verify the relay's TLS certificate against the OS trust store. Setting it false disables verification entirely — only safe for a relay you control on a trusted network, never across the public internet. |
+| `MAILER_SMTP_CACERTFILE` | no |  |  | Path to a PEM CA bundle to verify the relay against, for an internal CA or an image without an OS trust store. Boot fails if the path does not exist. |
+| `MAILER_SMTP_NO_MX_LOOKUPS` | no | true |  | Skip the MX lookup on MAILER_SMTP_RELAY. Set false only if you really pointed it at a domain rather than a host. |
 
 ## Authentication / OIDC
 
@@ -89,14 +97,20 @@ Variables marked *managed* are composed by the deployment packaging
 | `MICROSOFT_CLIENT_ID` | no |  |  | Microsoft Entra ID application (client) id. Leave empty to disable Microsoft sign-in. |
 | `MICROSOFT_CLIENT_SECRET` | no |  | yes | Microsoft Entra ID client secret. |
 | `MICROSOFT_REDIRECT_URI` | no |  |  | Microsoft OIDC redirect URI (https://<PHX_HOST>/auth/microsoft/callback). |
-| `MICROSOFT_BASE_URL` | no |  |  | Microsoft identity platform base URL override. |
+| `MICROSOFT_BASE_URL` | no |  |  | Microsoft identity platform base URL. Unset, the app derives "https://login.microsoftonline.com/<MICROSOFT_TENANT_ID>/v2.0" from MICROSOFT_TENANT_ID; set this only for a cloud whose endpoint differs (US Gov, China 21Vianet) or an internal proxy. |
 | `PRAXIS_CLIENT_ID` | no |  |  | Praxis/Egmont OIDC client id (PKCE public client). |
 | `PRAXIS_REDIRECT_URI` | no |  |  | Praxis OIDC redirect URI. |
 | `PRAXIS_BASE_URL` | no |  |  | Praxis OIDC base URL. |
 | `PRAXIS_LICENSE_SERVICE_URL` | no |  |  | Praxis license service endpoint. |
 | `PRAXIS_LICENSE_API_KEY` | no |  | yes | Praxis license service API key. |
 | `PRAXIS_PRODUCT_URL` | no |  |  | Praxis product URL used in license redirects. |
-| `DEBUG_AUTH_FAILURES` | no | false |  | Set to "true" to log detailed SSO failure reasons. WARNING - logs may then contain personal data; enable only while troubleshooting. |
+| `EDSPACE_PLATFORM_ADMINS` | conditional |  |  | Comma-separated emails granted platform-admin on reconciliation. This is the first-admin bootstrap: a fresh install has no account that can reach the backoffice, so set this and then run `bin/edspace rpc 'Edspace.Accounts.AdminReconciler.bootstrap() \|> IO.inspect(pretty: true)'` inside the app container. With email disabled, the result contains onboarding links to hand over securely. Additive only — it never demotes an existing admin. Read on the serving node. **Required when** bootstrapping the first platform admin on a fresh install. |
+
+## Member retention & purge
+
+| Variable | Required | Default | Secret | Description |
+|---|---|---|---|---|
+| `MEMBER_PURGE_ENABLED` | no | true |  | Deployment-side kill switch for the nightly member-purge sweep. Set "false" to stop it without a deploy — the worker then discards, and nothing inside the application can re-enable it. |
 
 ## PDF export
 
@@ -112,7 +126,7 @@ Variables marked *managed* are composed by the deployment packaging
 | `LANGFUSE_PUBLIC_KEY` | no |  |  | Langfuse public key. LLM tracing activates only when LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY and LANGFUSE_HOST are all set; leave empty to disable tracing. |
 | `LANGFUSE_SECRET_KEY` | no |  | yes | Langfuse secret key. |
 | `LANGFUSE_HOST` | no |  |  | Langfuse host receiving OpenTelemetry traces (your own Langfuse instance). |
-| `LANGFUSE_BASE_URL` | no |  |  | Langfuse REST API base URL; defaults to LANGFUSE_HOST. |
+| `LANGFUSE_BASE_URL` | no | https://cloud.langfuse.com |  | Langfuse REST API base URL — the read/query side (prompt fetches, usage and fair-use lookups), separate from the OTLP span exporter. Falls back to LANGFUSE_HOST, so one host variable can drive both the push and pull paths, and then to Langfuse's public cloud: an install that sets LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY without either host variable sends its queries to cloud.langfuse.com. Point this at your own instance, or leave all three unset. Trace export is unaffected — it activates only when LANGFUSE_HOST is set alongside both keys. |
 | `LANGFUSE_ENVIRONMENT` | no |  |  | deployment.environment tag on emitted traces. |
 | `LANGFUSE_RELEASE` | no |  |  | service.version tag on emitted traces. |
 | `EDSPACE_OTEL_LLM_PAYLOADS` | no | raw |  | Whether prompt/completion text is included in telemetry spans. Set to "none" to strip payloads (recommended when traces leave your infrastructure). |
@@ -130,4 +144,4 @@ Variables marked *managed* are composed by the deployment packaging
 
 Set only under guidance from EdSpace support:
 
-`PHX_SERVER`; `PORT`; `DNS_CLUSTER_QUERY`; `DB_QUEUE_TARGET_MS`; `DB_QUEUE_INTERVAL_MS`; `DB_TIMEOUT_MS`; `AZURE_API_KEY`; `AZURE_BASE_URL`; `REQ_LLM_POOL_SIZE`; `REQ_LLM_POOL_COUNT`; `REQ_LLM_STRUCTURED_POOL_SIZE`; `REQ_LLM_STRUCTURED_POOL_COUNT`; `REQ_LLM_BULK_POOL_SIZE`; `REQ_LLM_BULK_POOL_COUNT`; `MAX_CONCURRENT_STREAMS`; `MAX_CONCURRENT_CREATION_SESSIONS`; `MAX_CONCURRENT_BACKGROUND_TASKS`; `HISTORY_MESSAGE_WINDOW`; `EDSPACE_CHAT_MAX_TOTAL_CACHED_CHARS`; `EDSPACE_CHAT_MAX_HISTORY_CHARS`; `CHROMIC_PDF_TIMEOUT_MS`; `CHROMIC_PDF_INIT_TIMEOUT_MS`; `CHROMIC_PDF_CHROME_EXECUTABLE`; `LANGFUSE_BASEURL`; `LANGFUSE_TIMEOUT`; `OTEL_BSP_MAX_QUEUE_SIZE`; `OTEL_BSP_SCHEDULE_DELAY_MS`; `OTEL_BSP_EXPORT_TIMEOUT_MS`; `SOCKET_DRAINER_BATCH_SIZE`; `SOCKET_DRAINER_BATCH_INTERVAL_MS`; `SOCKET_DRAINER_SHUTDOWN_MS`; `ULIMIT_NOFILE`; `ERL_FLAGS`; `ERL_MAX_PORTS`; `ERL_MAX_PROCESSES`; `RELEASE_DISTRIBUTION`; `RELEASE_NODE`; `RELEASE_COOKIE`; `DISCARD_ASSISTANT_DRAFTS`
+`PHX_SERVER`; `PORT`; `DNS_CLUSTER_QUERY`; `DB_QUEUE_TARGET_MS`; `DB_QUEUE_INTERVAL_MS`; `DB_TIMEOUT_MS`; `AZURE_API_KEY`; `AZURE_BASE_URL`; `REQ_LLM_POOL_SIZE`; `REQ_LLM_POOL_COUNT`; `REQ_LLM_STRUCTURED_POOL_SIZE`; `REQ_LLM_STRUCTURED_POOL_COUNT`; `REQ_LLM_BULK_POOL_SIZE`; `REQ_LLM_BULK_POOL_COUNT`; `MAX_CONCURRENT_STREAMS`; `MAX_CONCURRENT_CREATION_SESSIONS`; `MAX_CONCURRENT_BACKGROUND_TASKS`; `HISTORY_MESSAGE_WINDOW`; `EDSPACE_CHAT_MAX_TOTAL_CACHED_CHARS`; `EDSPACE_CHAT_MAX_HISTORY_CHARS`; `MAILER_SMTP_RETRIES`; `CHROMIC_PDF_TIMEOUT_MS`; `CHROMIC_PDF_INIT_TIMEOUT_MS`; `CHROMIC_PDF_CHROME_EXECUTABLE`; `LANGFUSE_BASEURL`; `LANGFUSE_TIMEOUT`; `OTEL_BSP_MAX_QUEUE_SIZE`; `OTEL_BSP_SCHEDULE_DELAY_MS`; `OTEL_BSP_EXPORT_TIMEOUT_MS`; `SOCKET_DRAINER_BATCH_SIZE`; `SOCKET_DRAINER_BATCH_INTERVAL_MS`; `SOCKET_DRAINER_SHUTDOWN_MS`; `ULIMIT_NOFILE`; `ERL_FLAGS`; `ERL_MAX_PORTS`; `ERL_MAX_PROCESSES`; `RELEASE_DISTRIBUTION`; `RELEASE_NODE`; `RELEASE_COOKIE`; `DISCARD_ASSISTANT_DRAFTS`

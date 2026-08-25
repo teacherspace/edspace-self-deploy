@@ -5,7 +5,8 @@
 - Kubernetes 1.27+ with an ingress controller (any nginx-compatible class works; others via `ingress.className` + `ingress.annotations`).
 - PostgreSQL ≥ 16.3 with the `vector`, `citext` and `pg_trgm` extensions available — see [database.md](database.md). For evaluation you can use the bundled Postgres instead (`db.bundled.enabled=true`).
 - Registry credentials from EdSpace (username + token). One credential covers image pulls and the chart itself.
-- An LLM provider key and a [MailPace](https://mailpace.com) API token (see [limitations.md](limitations.md)).
+- An LLM provider key.
+- A way to send transactional email — a [MailPace](https://mailpace.com) API token or an SMTP relay — **or** a decision to run without it (`mailer.adapter: none`, see [configuration.md](configuration.md#transactional-email)).
 
 ## Install
 
@@ -32,11 +33,15 @@ llm:
   provider: azure
   apiKey: <llm-key>
   baseUrl: https://<your-endpoint>.cognitiveservices.azure.com/
-  textDeployment: gpt-5.4
-  smallDeployment: gpt-5-mini
+  textDeployment: gpt-5.6-sol
+  smallDeployment: gpt-5.6-luna
   embeddingDeployment: text-embedding-3-small
 
+# MailPace. For an SMTP relay use `adapter: smtp` with `smtp.relay`/`smtp.password`
+# instead, or `adapter: none` to run with email disabled — see
+# configuration.md#transactional-email.
 mailer:
+  adapter: mailpace
   fromEmail: noreply@example.org
   mailpaceApiKey: <mailpace-token>
 

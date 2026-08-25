@@ -127,6 +127,7 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- include "edspace.mailerCaVolumeMount" . | nindent 12 }}
             {{- if and (eq .Values.storage.adapter "local_disk") .Values.storage.localDisk.persistence.enabled }}
             - name: uploads
               mountPath: {{ .Values.storage.localDisk.root }}
@@ -134,6 +135,7 @@ spec:
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- include "edspace.mailerCaVolume" . | nindent 8 }}
         {{- if and (eq .Values.storage.adapter "local_disk") .Values.storage.localDisk.persistence.enabled }}
         - name: uploads
           persistentVolumeClaim:

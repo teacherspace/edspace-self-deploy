@@ -366,6 +366,14 @@
     "mailer": {
       "type": "object",
       "properties": {
+        "adapter": {
+          "enum": [
+            "mailpace",
+            "smtp",
+            "none"
+          ],
+          "description": "Delivery backend. 'none' disables transactional email; sign-in then relies on passwords and/or SSO and invitation links are handed over manually."
+        },
         "fromEmail": {
           "type": "string"
         },
@@ -375,11 +383,71 @@
         "mailpaceApiKey": {
           "type": "string"
         },
+        "smtp": {
+          "type": "object",
+          "description": "Settings for adapter smtp. Leave tls/auth empty to keep the application's own defaults, which depend on ssl and username.",
+          "properties": {
+            "relay": {
+              "type": "string"
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535
+            },
+            "username": {
+              "type": "string"
+            },
+            "password": {
+              "type": "string"
+            },
+            "ssl": {
+              "type": "boolean"
+            },
+            "tls": {
+              "enum": [
+                "",
+                "always",
+                "never",
+                "if_available"
+              ]
+            },
+            "auth": {
+              "enum": [
+                "",
+                "always",
+                "never",
+                "if_available"
+              ]
+            },
+            "tlsVerify": {
+              "type": "boolean"
+            },
+            "caCertSecret": {
+              "type": "string",
+              "description": "Existing Secret containing a PEM CA bundle for the SMTP relay. Mounted read-only at /etc/edspace/mailer-ca/ca.crt."
+            },
+            "caCertSecretKey": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Key in caCertSecret containing the PEM bundle."
+            },
+            "caCertFile": {
+              "type": "string"
+            },
+            "noMxLookups": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
+        },
         "existingSecret": {
-          "type": "string"
+          "type": "string",
+          "description": "Customer-managed Secret holding the mailer credential - the MailPace API key, or the SMTP password when adapter is smtp."
         },
         "existingSecretKey": {
-          "type": "string"
+          "type": "string",
+          "description": "Key inside existingSecret. Defaults to mailpace-api-key for adapter mailpace and smtp-password for adapter smtp."
         }
       },
       "additionalProperties": false
@@ -1110,7 +1178,7 @@
               ]
             }
           ],
-          "description": "Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; set to \"false\" when no Azure Speech resource is available."
+          "description": "Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; the packaging sets it to \"false\" until an Azure Speech resource is provided."
         },
         "AZURE_SPEECH_KEY": {
           "not": {},
@@ -1124,17 +1192,9 @@
           "type": "string",
           "description": "Azure Speech endpoint override."
         },
-        "EDSPACE_SPEECH_RECOGNITION_LANGUAGE": {
-          "type": "string",
-          "description": "Primary speech-to-text language."
-        },
-        "EDSPACE_SPEECH_RECOGNITION_LANGUAGES": {
-          "type": "string",
-          "description": "Comma-separated set of languages offered for speech-to-text."
-        },
-        "EDSPACE_SPEECH_VOICE": {
-          "type": "string",
-          "description": "Default text-to-speech voice."
+        "MAILER_ADAPTER": {
+          "not": {},
+          "description": "MAILER_ADAPTER has a dedicated structured chart value; do not duplicate it in env/envSecret."
         },
         "MAILER_FROM_EMAIL": {
           "not": {},
@@ -1147,6 +1207,58 @@
         "MAILPACE_API_KEY": {
           "not": {},
           "description": "MAILPACE_API_KEY has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_RELAY": {
+          "not": {},
+          "description": "MAILER_SMTP_RELAY has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_PORT": {
+          "not": {},
+          "description": "MAILER_SMTP_PORT has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_USERNAME": {
+          "not": {},
+          "description": "MAILER_SMTP_USERNAME has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_PASSWORD": {
+          "not": {},
+          "description": "MAILER_SMTP_PASSWORD has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_SSL": {
+          "not": {},
+          "description": "MAILER_SMTP_SSL has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_TLS": {
+          "not": {},
+          "description": "MAILER_SMTP_TLS has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_AUTH": {
+          "not": {},
+          "description": "MAILER_SMTP_AUTH has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_TLS_VERIFY": {
+          "not": {},
+          "description": "MAILER_SMTP_TLS_VERIFY has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_CACERTFILE": {
+          "not": {},
+          "description": "MAILER_SMTP_CACERTFILE has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_NO_MX_LOOKUPS": {
+          "not": {},
+          "description": "MAILER_SMTP_NO_MX_LOOKUPS has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_RETRIES": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string",
+              "pattern": "^-?[0-9]+$"
+            }
+          ],
+          "description": "gen_smtp connection retries per message."
         },
         "UNILOGIN_CLIENT_ID": {
           "type": "string",
@@ -1190,7 +1302,7 @@
         },
         "MICROSOFT_BASE_URL": {
           "type": "string",
-          "description": "Microsoft identity platform base URL override."
+          "description": "Microsoft identity platform base URL. Unset, the app derives \"https://login.microsoftonline.com/<MICROSOFT_TENANT_ID>/v2.0\" from MICROSOFT_TENANT_ID; set this only for a cloud whose endpoint differs (US Gov, China 21Vianet) or an internal proxy."
         },
         "PRAXIS_CLIENT_ID": {
           "type": "string",
@@ -1216,7 +1328,11 @@
           "type": "string",
           "description": "Praxis product URL used in license redirects."
         },
-        "DEBUG_AUTH_FAILURES": {
+        "EDSPACE_PLATFORM_ADMINS": {
+          "type": "string",
+          "description": "Comma-separated emails granted platform-admin on reconciliation. This is the first-admin bootstrap: a fresh install has no account that can reach the backoffice, so set this and then run `bin/edspace rpc 'Edspace.Accounts.AdminReconciler.bootstrap() |> IO.inspect(pretty: true)'` inside the app container. With email disabled, the result contains onboarding links to hand over securely. Additive only \u2014 it never demotes an existing admin. Read on the serving node."
+        },
+        "MEMBER_PURGE_ENABLED": {
           "anyOf": [
             {
               "type": "boolean"
@@ -1229,7 +1345,7 @@
               ]
             }
           ],
-          "description": "Set to \"true\" to log detailed SSO failure reasons. WARNING - logs may then contain personal data; enable only while troubleshooting."
+          "description": "Deployment-side kill switch for the nightly member-purge sweep. Set \"false\" to stop it without a deploy \u2014 the worker then discards, and nothing inside the application can re-enable it."
         },
         "PDF_ENABLED": {
           "anyOf": [
@@ -1300,7 +1416,7 @@
         },
         "LANGFUSE_BASE_URL": {
           "type": "string",
-          "description": "Langfuse REST API base URL; defaults to LANGFUSE_HOST."
+          "description": "Langfuse REST API base URL \u2014 the read/query side (prompt fetches, usage and fair-use lookups), separate from the OTLP span exporter. Falls back to LANGFUSE_HOST, so one host variable can drive both the push and pull paths, and then to Langfuse's public cloud: an install that sets LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY without either host variable sends its queries to cloud.langfuse.com. Point this at your own instance, or leave all three unset."
         },
         "LANGFUSE_BASEURL": {
           "type": "string",
@@ -1315,16 +1431,8 @@
           "description": "service.version tag on emitted traces."
         },
         "LANGFUSE_TIMEOUT": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "string",
-              "pattern": "^-?[0-9]+$"
-            }
-          ],
-          "description": "Langfuse REST client timeout (ms)."
+          "type": "string",
+          "description": "Langfuse REST client timeout in SECONDS \u2014 integer or float, not milliseconds. The effective default is 5 seconds; a value like 5000 would mean 5000 seconds, and a non-numeric value raises."
         },
         "EDSPACE_OTEL_LLM_PAYLOADS": {
           "type": "string",
@@ -1832,7 +1940,7 @@
               ]
             }
           ],
-          "description": "Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; set to \"false\" when no Azure Speech resource is available."
+          "description": "Enables speech features (STT/TTS). Requires the AZURE_SPEECH_* settings when enabled; the packaging sets it to \"false\" until an Azure Speech resource is provided."
         },
         "AZURE_SPEECH_KEY": {
           "type": "string",
@@ -1846,17 +1954,9 @@
           "type": "string",
           "description": "Azure Speech endpoint override."
         },
-        "EDSPACE_SPEECH_RECOGNITION_LANGUAGE": {
-          "type": "string",
-          "description": "Primary speech-to-text language."
-        },
-        "EDSPACE_SPEECH_RECOGNITION_LANGUAGES": {
-          "type": "string",
-          "description": "Comma-separated set of languages offered for speech-to-text."
-        },
-        "EDSPACE_SPEECH_VOICE": {
-          "type": "string",
-          "description": "Default text-to-speech voice."
+        "MAILER_ADAPTER": {
+          "not": {},
+          "description": "MAILER_ADAPTER has a dedicated structured chart value; do not duplicate it in env/envSecret."
         },
         "MAILER_FROM_EMAIL": {
           "not": {},
@@ -1869,6 +1969,58 @@
         "MAILPACE_API_KEY": {
           "not": {},
           "description": "MAILPACE_API_KEY has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_RELAY": {
+          "not": {},
+          "description": "MAILER_SMTP_RELAY has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_PORT": {
+          "not": {},
+          "description": "MAILER_SMTP_PORT has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_USERNAME": {
+          "not": {},
+          "description": "MAILER_SMTP_USERNAME has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_PASSWORD": {
+          "not": {},
+          "description": "MAILER_SMTP_PASSWORD has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_SSL": {
+          "not": {},
+          "description": "MAILER_SMTP_SSL has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_TLS": {
+          "not": {},
+          "description": "MAILER_SMTP_TLS has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_AUTH": {
+          "not": {},
+          "description": "MAILER_SMTP_AUTH has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_TLS_VERIFY": {
+          "not": {},
+          "description": "MAILER_SMTP_TLS_VERIFY has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_CACERTFILE": {
+          "not": {},
+          "description": "MAILER_SMTP_CACERTFILE has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_NO_MX_LOOKUPS": {
+          "not": {},
+          "description": "MAILER_SMTP_NO_MX_LOOKUPS has a dedicated structured chart value; do not duplicate it in env/envSecret."
+        },
+        "MAILER_SMTP_RETRIES": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "string",
+              "pattern": "^-?[0-9]+$"
+            }
+          ],
+          "description": "gen_smtp connection retries per message."
         },
         "UNILOGIN_CLIENT_ID": {
           "type": "string",
@@ -1912,7 +2064,7 @@
         },
         "MICROSOFT_BASE_URL": {
           "type": "string",
-          "description": "Microsoft identity platform base URL override."
+          "description": "Microsoft identity platform base URL. Unset, the app derives \"https://login.microsoftonline.com/<MICROSOFT_TENANT_ID>/v2.0\" from MICROSOFT_TENANT_ID; set this only for a cloud whose endpoint differs (US Gov, China 21Vianet) or an internal proxy."
         },
         "PRAXIS_CLIENT_ID": {
           "type": "string",
@@ -1938,7 +2090,11 @@
           "type": "string",
           "description": "Praxis product URL used in license redirects."
         },
-        "DEBUG_AUTH_FAILURES": {
+        "EDSPACE_PLATFORM_ADMINS": {
+          "type": "string",
+          "description": "Comma-separated emails granted platform-admin on reconciliation. This is the first-admin bootstrap: a fresh install has no account that can reach the backoffice, so set this and then run `bin/edspace rpc 'Edspace.Accounts.AdminReconciler.bootstrap() |> IO.inspect(pretty: true)'` inside the app container. With email disabled, the result contains onboarding links to hand over securely. Additive only \u2014 it never demotes an existing admin. Read on the serving node."
+        },
+        "MEMBER_PURGE_ENABLED": {
           "anyOf": [
             {
               "type": "boolean"
@@ -1951,7 +2107,7 @@
               ]
             }
           ],
-          "description": "Set to \"true\" to log detailed SSO failure reasons. WARNING - logs may then contain personal data; enable only while troubleshooting."
+          "description": "Deployment-side kill switch for the nightly member-purge sweep. Set \"false\" to stop it without a deploy \u2014 the worker then discards, and nothing inside the application can re-enable it."
         },
         "PDF_ENABLED": {
           "anyOf": [
@@ -2022,7 +2178,7 @@
         },
         "LANGFUSE_BASE_URL": {
           "type": "string",
-          "description": "Langfuse REST API base URL; defaults to LANGFUSE_HOST."
+          "description": "Langfuse REST API base URL \u2014 the read/query side (prompt fetches, usage and fair-use lookups), separate from the OTLP span exporter. Falls back to LANGFUSE_HOST, so one host variable can drive both the push and pull paths, and then to Langfuse's public cloud: an install that sets LANGFUSE_PUBLIC_KEY and LANGFUSE_SECRET_KEY without either host variable sends its queries to cloud.langfuse.com. Point this at your own instance, or leave all three unset."
         },
         "LANGFUSE_BASEURL": {
           "type": "string",
@@ -2037,16 +2193,8 @@
           "description": "service.version tag on emitted traces."
         },
         "LANGFUSE_TIMEOUT": {
-          "anyOf": [
-            {
-              "type": "integer"
-            },
-            {
-              "type": "string",
-              "pattern": "^-?[0-9]+$"
-            }
-          ],
-          "description": "Langfuse REST client timeout (ms)."
+          "type": "string",
+          "description": "Langfuse REST client timeout in SECONDS \u2014 integer or float, not milliseconds. The effective default is 5 seconds; a value like 5000 would mean 5000 seconds, and a non-numeric value raises."
         },
         "EDSPACE_OTEL_LLM_PAYLOADS": {
           "type": "string",
@@ -2675,104 +2823,284 @@
       ]
     },
     {
-      "$comment": "MailPace is the only production mailer and its API key is required.",
-      "anyOf": [
-        {
-          "properties": {
-            "mailer": {
-              "properties": {
-                "mailpaceApiKey": {
-                  "minLength": 1
-                }
-              },
-              "required": [
-                "mailpaceApiKey"
-              ]
-            }
-          }
-        },
-        {
-          "properties": {
-            "mailer": {
-              "properties": {
-                "existingSecret": {
-                  "minLength": 1
-                }
-              },
-              "required": [
-                "existingSecret"
-              ]
-            }
-          }
-        },
-        {
-          "properties": {
-            "extraEnvFrom": {
-              "minItems": 1
-            }
-          }
-        },
-        {
-          "properties": {
-            "extraEnv": {
-              "contains": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "const": "MAILPACE_API_KEY"
-                  }
-                },
-                "required": [
-                  "name"
+      "$comment": "adapter mailpace needs an API key, from a value or a customer-managed Secret.",
+      "if": {
+        "properties": {
+          "mailer": {
+            "properties": {
+              "adapter": {
+                "enum": [
+                  "mailpace"
                 ]
               }
             }
           }
         }
-      ]
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "mailpaceApiKey": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "mailpaceApiKey"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "existingSecret": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "existingSecret"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "extraEnvFrom": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "extraEnv": {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "const": "MAILPACE_API_KEY"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
     },
     {
-      "$comment": "Transactional email requires a verified sender address.",
-      "anyOf": [
-        {
-          "properties": {
-            "mailer": {
-              "properties": {
-                "fromEmail": {
-                  "minLength": 1
-                }
-              },
-              "required": [
-                "fromEmail"
-              ]
-            }
-          }
-        },
-        {
-          "properties": {
-            "extraEnvFrom": {
-              "minItems": 1
-            }
-          }
-        },
-        {
-          "properties": {
-            "extraEnv": {
-              "contains": {
-                "type": "object",
-                "properties": {
-                  "name": {
-                    "const": "MAILER_FROM_EMAIL"
-                  }
-                },
-                "required": [
-                  "name"
+      "$comment": "adapter smtp needs a relay host; the app raises at boot without one.",
+      "if": {
+        "properties": {
+          "mailer": {
+            "properties": {
+              "adapter": {
+                "enum": [
+                  "smtp"
                 ]
               }
             }
           }
         }
-      ]
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "smtp": {
+                    "properties": {
+                      "relay": {
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "relay"
+                    ]
+                  }
+                },
+                "required": [
+                  "smtp"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "extraEnvFrom": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "extraEnv": {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "const": "MAILER_SMTP_RELAY"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$comment": "An SMTP username enables mandatory authentication and therefore needs a password source.",
+      "if": {
+        "properties": {
+          "mailer": {
+            "properties": {
+              "adapter": {
+                "const": "smtp"
+              },
+              "smtp": {
+                "properties": {
+                  "username": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "username"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "smtp": {
+                    "properties": {
+                      "password": {
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "password"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "existingSecret": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "existingSecret"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "extraEnvFrom": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "extraEnv": {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "const": "MAILER_SMTP_PASSWORD"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$comment": "Any real provider needs a verified sender address; adapter none does not.",
+      "if": {
+        "properties": {
+          "mailer": {
+            "properties": {
+              "adapter": {
+                "enum": [
+                  "mailpace",
+                  "smtp"
+                ]
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "fromEmail": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "fromEmail"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "extraEnvFrom": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "extraEnv": {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "const": "MAILER_FROM_EMAIL"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
     },
     {
       "$comment": "Azure LLM deployments need an endpoint and all three deployment names.",

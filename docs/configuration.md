@@ -8,7 +8,7 @@ A setting gets a **structured chart value** only when the chart has to act on it
 
 ```yaml
 env:                       # non-secret → ConfigMap
-  EDSPACE_SPEECH_VOICE: en-US-JennyNeural
+  EDSPACE_LLM_API_VERSION: "2024-10-21"
   POOL_SIZE: "40"
 envSecret:                 # secret → Secret
   UNILOGIN_CLIENT_SECRET: "..."
@@ -53,9 +53,30 @@ enable it, set `env.EDSPACE_SPEECH_ENABLED: "true"`,
 `envSecret.AZURE_SPEECH_KEY`, and `env.AZURE_SPEECH_REGION` (or supply those
 last two through `extraEnv`/`extraEnvFrom`).
 
+## Transactional email
+
+EdSpace sends exactly three messages, all about getting into an account: magic-link sign-in, password reset, and invitations. There is no marketing or notification mail, which is why email is **optional**.
+
+`mailer.adapter` picks the backend. Every mode validates its own inputs and **raises at boot** with the offending variable named — a silently misconfigured mailer drops sign-in links, which is the one failure worth refusing to defer.
+
+- `mailpace` (default): set `mailer.mailpaceApiKey` (or `mailer.existingSecret`, default key `mailpace-api-key`) and a `mailer.fromEmail` on a MailPace-verified domain.
+- `smtp`: set `mailer.smtp.relay` and `mailer.fromEmail`. The password goes in `mailer.smtp.password` or `mailer.existingSecret` (default key `smtp-password`). Defaults are the safe ones — port 587 with **mandatory** STARTTLS and certificate verification against the OS trust store, authentication required once `mailer.smtp.username` is set, and no MX lookup on a relay you named explicitly. Leave `mailer.smtp.tls`/`auth` empty to keep those defaults; setting them overrides. For implicit TLS use `ssl: true` with `port: 465`.
+  - For an internal CA, put the PEM bundle in a Kubernetes Secret and set `mailer.smtp.caCertSecret` plus optional `caCertSecretKey` (default `ca.crt`). The chart mounts it into the app, migration, and seed pods and sets the path automatically. `mailer.smtp.caCertFile` remains available only when a custom image already contains the file. As a last resort, `mailer.smtp.tlsVerify: false` disables verification for a relay on a network you trust.
+- `none`: nothing is queued and nothing is sent. `/sign-in` offers a password form alongside any SSO buttons, `/onboarding` asks an invitee to set a password as well as a name, and an invitation's single-use link is shown to the inviting admin to pass on by hand. Read the consequences in [limitations.md](limitations.md) before choosing it — there is no self-service password recovery in this mode.
+
+Ask a running node what it resolved — it reports the adapter and whether a credential is set, never the credential itself:
+
+```sh
+bin/edspace eval "Edspace.Mailer.summary() |> IO.inspect()"
+```
+
 ## SSO / OIDC
 
 UniLogin, Microsoft Entra ID and Praxis are all optional and configured via passthrough vars (`UNILOGIN_*`, `MICROSOFT_*`, `PRAXIS_*`). Redirect URIs are `https://<app.host>/auth/<provider>/callback`.
+
+**Microsoft Entra ID.** Create an app registration (Web platform, redirect URI `https://<app.host>/auth/microsoft/callback`, a client secret, the optional `email` token claim, and `openid profile email` delegated permissions), then set `MICROSOFT_TENANT_ID` (your Directory (tenant) ID — the app default `common` also admits personal Microsoft accounts, so set it explicitly), `MICROSOFT_CLIENT_ID`, `MICROSOFT_CLIENT_SECRET` (secret) and `MICROSOFT_REDIRECT_URI`. An empty client id disables the provider. On the Azure Deploy-button path these come from the form's *Sign-in* step and the redirect URI is composed for you — see the [managed-app README](../marketplace/azure/managed-app/README.md).
+
+**First admin.** A fresh install has no account that can reach the backoffice. Set `env.EDSPACE_PLATFORM_ADMINS` to a comma-separated list of admin emails, then run `bin/edspace rpc 'Edspace.Accounts.AdminReconciler.bootstrap() |> IO.inspect(pretty: true)'` in the app container. It is additive — it never demotes an existing admin. With email enabled, the admin requests a magic link from `/sign-in`; with `mailer.adapter: none`, the command returns a seven-day `onboarding_links` URL to hand over securely so the admin can create their password.
 
 ## LLM tracing (Langfuse)
 
