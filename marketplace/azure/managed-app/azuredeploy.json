@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "1041974425984738088"
+      "templateHash": "18209998362260074049"
     }
   },
   "parameters": {
@@ -895,6 +895,7 @@
             "value": "[parameters('appSize')]"
           },
           "phxHost": "[if(empty(parameters('customDomain')), createObject('value', format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain)), createObject('value', parameters('customDomain')))]",
+          "checkOrigin": "[if(empty(parameters('customDomain')), createObject('value', format('https://{0}', format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain))), createObject('value', format('https://{0},https://{1}', parameters('customDomain'), format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain))))]",
           "registryServer": {
             "value": "[parameters('registryServer')]"
           },
@@ -1017,7 +1018,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "14275140060400485080"
+              "templateHash": "6412580234445209165"
             }
           },
           "parameters": {
@@ -1046,6 +1047,9 @@
               }
             },
             "phxHost": {
+              "type": "string"
+            },
+            "checkOrigin": {
               "type": "string"
             },
             "registryServer": {
@@ -1238,7 +1242,7 @@
               },
               {
                 "name": "PHX_CHECK_ORIGIN",
-                "value": "[format('https://{0}', parameters('phxHost'))]"
+                "value": "[parameters('checkOrigin')]"
               },
               {
                 "name": "EDSPACE_FILE_STORAGE_ADAPTER",
@@ -1416,7 +1420,7 @@
   "outputs": {
     "appUrl": {
       "type": "string",
-      "value": "[format('https://{0}', reference(resourceId('Microsoft.Resources/deployments', 'edspace-app'), '2025-04-01').outputs.fqdn.value)]"
+      "value": "[format('https://{0}', if(empty(parameters('customDomain')), format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain), parameters('customDomain')))]"
     },
     "appFqdn": {
       "type": "string",
@@ -1440,7 +1444,7 @@
     },
     "microsoftRedirectUri": {
       "type": "string",
-      "value": "[format('https://{0}/auth/microsoft/callback', reference(resourceId('Microsoft.Resources/deployments', 'edspace-app'), '2025-04-01').outputs.fqdn.value)]"
+      "value": "[format('https://{0}/auth/microsoft/callback', if(empty(parameters('customDomain')), format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain), parameters('customDomain')))]"
     }
   }
 }

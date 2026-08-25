@@ -53,8 +53,9 @@ rather than installing an app that cannot send.
 app registration in your tenant (Entra admin center → App registrations → New):
 
 1. Platform **Web**, redirect URI `https://<app host>/auth/microsoft/callback`.
-   With a `customDomain` the host is known up front; otherwise deploy first,
-   read the `microsoftRedirectUri` output, and add it to the registration.
+   The `microsoftRedirectUri` output shows the exact value in either case
+   (custom domain or generated host); with a custom domain it is known up
+   front, otherwise deploy first and copy it from the outputs.
 2. **Certificates & secrets** → new client secret; copy its *Value*.
 3. **Token configuration** → add the optional `email` claim; **API
    permissions** → `openid`, `profile`, `email` (Microsoft Graph, delegated).
@@ -217,8 +218,12 @@ Don't.
 
 `PHX_HOST` is set at install: the generated
 `edspace.<env-default-domain>` FQDN, or the customer's `customDomain` if
-supplied. Custom-domain *binding* can't complete in one ARM pass (async DNS
-validation + the customer can't touch the managed RG):
+supplied. With a custom domain, `PHX_CHECK_ORIGIN` allows **both** hosts, so
+the instance stays usable (WebSockets included) at the generated address —
+the `appFqdn` output — until the domain is bound; only links the app
+generates itself (emails, the Microsoft redirect URI, `appUrl`) use the custom
+domain from the start. Custom-domain *binding* can't complete in one ARM pass
+(async DNS validation + the customer can't touch the managed RG):
 
 1. Customer creates a CNAME `<domain> -> <appFqdn>` and TXT
    `asuid.<domain> -> <ACA custom domain verification id>`.
@@ -230,7 +235,7 @@ validation + the customer can't touch the managed RG):
 
 | Template parameter | App env var |
 |---|---|
-| `customDomain` (or generated FQDN) | `PHX_HOST`, `PHX_CHECK_ORIGIN` |
+| `customDomain` (or generated FQDN) | `PHX_HOST`; `PHX_CHECK_ORIGIN` (custom domain **and** generated FQDN when a custom domain is set) |
 | `mailerAdapter` | `MAILER_ADAPTER` |
 | `mailpaceApiKey` | `MAILPACE_API_KEY` (adapter `mailpace` only) |
 | `mailFromEmail` / `mailFromName` | `MAILER_FROM_EMAIL` / `MAILER_FROM_NAME` (omitted under adapter `none`) |

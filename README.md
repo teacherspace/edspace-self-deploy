@@ -45,7 +45,7 @@ What gets deployed into your resource group:
 
 After deployment succeeds:
 
-1. Open the deployment's **Outputs** tab — `appUrl` is your instance's address (verify `GET /health` returns `ok`).
+1. Open the deployment's **Outputs** tab — `appUrl` is your instance's address (verify `GET /health` returns `ok`). If you set a custom domain, use `https://<appFqdn>` until EdSpace support has bound the domain; both addresses are accepted.
 2. Bootstrap the first admin (no self-service signup exists — a fresh install has no account that can log in):
 
    ```sh
@@ -60,7 +60,7 @@ After deployment succeeds:
    copy the returned `onboarding_links` URL over a trusted channel; it is valid
    for seven days and asks the admin to set a password. Full onboarding details:
    [CLIENT_GUIDE.md](CLIENT_GUIDE.md#manual-user-creation).
-3. If you enabled Microsoft sign-in without a custom domain, copy the `microsoftRedirectUri` output into the Entra app registration's redirect URIs now — the button will not work until it matches.
+3. If you enabled Microsoft sign-in, make sure the `microsoftRedirectUri` output is registered in the Entra app registration's redirect URIs — the button will not work until it matches.
 4. To update later: `az containerapp update -n edspace -g <resource-group> --image edspace.azurecr.io/edspace/edspace:<new tag>`.
 
 Prefer the CLI over the portal? See "Deploy from the CLI" in

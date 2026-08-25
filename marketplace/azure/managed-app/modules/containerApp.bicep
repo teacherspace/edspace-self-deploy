@@ -19,6 +19,9 @@ param appSize string = 'standard'
 // Public hostname (PHX_HOST). Computed in mainTemplate from the managed
 // environment default domain, or the customer custom domain.
 param phxHost string
+// Comma-separated allowed WebSocket origins (PHX_CHECK_ORIGIN). Computed in
+// mainTemplate: the custom domain plus the generated address during cutover.
+param checkOrigin string
 
 // --- registry ---
 param registryServer string
@@ -137,7 +140,7 @@ var secrets = concat(
 
 var plainEnv = [
   { name: 'PHX_HOST', value: phxHost }
-  { name: 'PHX_CHECK_ORIGIN', value: 'https://${phxHost}' }
+  { name: 'PHX_CHECK_ORIGIN', value: checkOrigin }
   { name: 'EDSPACE_FILE_STORAGE_ADAPTER', value: 'azure_blob' }
   { name: 'AZURE_STORAGE_ACCOUNT', value: storageAccountName }
   { name: 'AZURE_STORAGE_CONTAINER', value: storageContainerName }

@@ -234,7 +234,7 @@
             "type": "Microsoft.Common.TextBox",
             "label": "Custom domain (optional)",
             "placeholder": "edspace.myschool.example",
-            "toolTip": "Leave empty to use the generated *.azurecontainerapps.io address. Custom domains are activated after installation by EdSpace support — until DNS is configured and the domain is bound, the app will NOT be reachable at the generated address (it only accepts its configured hostname). See the installation guide.",
+            "toolTip": "Leave empty to use the generated *.azurecontainerapps.io address. Custom domains are activated after installation by EdSpace support. Until DNS is configured and the domain is bound, use the generated address shown as the appFqdn output; generated links and the Microsoft sign-in redirect already use the custom domain. See the installation guide.",
             "constraints": {
               "required": false,
               "regex": "^$|^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$",

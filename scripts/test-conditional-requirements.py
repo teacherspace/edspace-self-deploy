@@ -97,6 +97,19 @@ def main() -> None:
             "mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? keyVault.getSecret('smtp-password') : ''",
         "disabled Entra emits no provider configuration":
             "enableMicrosoftSso ? [\n    { name: 'MICROSOFT_TENANT_ID'",
+        # A custom domain is bound after install; both origins must stay
+        # allowed so the instance (WebSockets included) works at the generated
+        # address during the cutover.
+        "custom domain keeps the generated origin allowed during cutover":
+            ": 'https://${customDomain},https://${generatedHost}'",
+        "PHX_CHECK_ORIGIN is the computed origin list":
+            "{ name: 'PHX_CHECK_ORIGIN', value: checkOrigin }",
+        # Outputs must name the host the app itself uses, or the customer
+        # registers the wrong redirect URI / opens the wrong address.
+        "appUrl output uses the app host":
+            "output appUrl string = 'https://${phxHost}'",
+        "Microsoft redirect output uses the app host":
+            "output microsoftRedirectUri string = 'https://${phxHost}/auth/microsoft/callback'",
     }
 
     for label, fragment in fragments.items():

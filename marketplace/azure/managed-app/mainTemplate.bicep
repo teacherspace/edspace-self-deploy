@@ -518,7 +518,15 @@ module postgres 'modules/postgres.bicep' = {
 // ----------------------------------------------------------------------- app
 // PHX_HOST is resolvable before the app exists: the app's fixed name is
 // `edspace`, so its FQDN is edspace.<environment default domain>.
-var phxHost = empty(customDomain) ? 'edspace.${acaEnv.properties.defaultDomain}' : customDomain
+var generatedHost = 'edspace.${acaEnv.properties.defaultDomain}'
+var phxHost = empty(customDomain) ? generatedHost : customDomain
+// A custom domain is bound post-install (see the README runbook), so until
+// then the app is only reachable at the generated address. Allowing both
+// origins keeps the instance usable — WebSockets included — during that
+// cutover; the generated host stays valid afterwards, which is harmless.
+var checkOrigin = empty(customDomain)
+  ? 'https://${generatedHost}'
+  : 'https://${customDomain},https://${generatedHost}'
 
 module app 'modules/containerApp.bicep' = {
   name: 'edspace-app'
@@ -529,6 +537,7 @@ module app 'modules/containerApp.bicep' = {
     containerImage: containerImage
     appSize: appSize
     phxHost: phxHost
+    checkOrigin: checkOrigin
 
     registryServer: registryServer
     registryUsername: registryUsername
@@ -606,12 +615,17 @@ module app 'modules/containerApp.bicep' = {
 }
 
 // ------------------------------------------------------------------- outputs
-output appUrl string = 'https://${app.outputs.fqdn}'
+// appUrl is where the customer signs in: the custom domain once it is
+// bound, or the generated address. appFqdn is always the generated ACA
+// address — it is the CNAME target of the custom-domain runbook, and the
+// fallback URL while the custom domain is still being bound.
+output appUrl string = 'https://${phxHost}'
 output appFqdn string = app.outputs.fqdn
 output postgresFqdn string = postgres.outputs.fqdn
 output storageAccountName string = storage.name
 output keyVaultName string = keyVault.name
 output aiAccountName string = enableAzureAi ? aiAccountName : ''
 // Always emitted so a customer enabling SSO later knows the exact URI to
-// register; MICROSOFT_REDIRECT_URI in the app is set from the same expression.
-output microsoftRedirectUri string = 'https://${app.outputs.fqdn}/auth/microsoft/callback'
+// register; MICROSOFT_REDIRECT_URI in the app is set from the same host, so
+// the two can never disagree (with a custom domain this is the custom host).
+output microsoftRedirectUri string = 'https://${phxHost}/auth/microsoft/callback'
