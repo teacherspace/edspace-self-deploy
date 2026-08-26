@@ -52,8 +52,12 @@
             "type": "Microsoft.Common.Slider",
             "label": "Storage (GiB)",
             "subLabel": "GiB",
+            "min": 32,
+            "max": 256,
+            "step": 32,
             "defaultValue": 32,
-            "constraints": { "min": 32, "max": 256, "required": true },
+            "showStepMarkers": true,
+            "constraints": { "required": true },
             "toolTip": "Storage auto-grows; this sets the initial allocation."
           }
         ]
