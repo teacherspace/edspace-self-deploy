@@ -218,16 +218,41 @@ Don't.
   text-model dropdown and the backoffice small-model default. Every deployment name
   in it must exist on the account, or an admin selecting it gets an
   unknown-deployment failure with nothing in the install explaining why. The
-  template deploys all 8: `gpt-5.1`, `gpt-5.4`, `gpt-5.6-sol`, `gpt-5.6-terra`
-  (text + small), `gpt-5.6-luna`, `gpt-5-mini`, `Mistral-Large-3`,
-  `text-embedding-3-small`. Adding a model to the app registry means adding it here.
+  template's `modelCatalog` mirrors that registry — all 8: `gpt-5.1`, `gpt-5.4`,
+  `gpt-5.6-sol`, `gpt-5.6-terra` (text + small), `gpt-5.6-luna`, `gpt-5-mini`,
+  `Mistral-Large-3`, `text-embedding-3-small`. Adding a model to the app registry
+  means adding it here, with its `modelId` (`azure:mistral-large-3` is the one that
+  differs from its deployment name).
   `infrastructure/iac-ai-foundry` deploys the same set plus `gpt-5.5` and
   `text-embedding-3-large`; both are omitted here because no app code path reaches
   them and each would draw customer quota for nothing.
-- **AI quota gotcha**: GlobalStandard model deployments draw on the
-  *customer subscription's* quota in `aiLocation`. Deployment fails without
-  quota — the UI warns and links the increase form; capacities are parameters.
-  Quota is per-model, so 8 deployments means 8 buckets, not one shared pool.
+- **Which of the catalog gets deployed is the customer's choice**: `deployedModels`
+  (all 7 chat/small models by default) plus `defaultTextModel` / `defaultSmallModel`,
+  which are unioned into the set so `EDSPACE_LLM_TEXT_MODEL` / `_SMALL_MODEL` can
+  never name a deployment that was not created — the failure that would break every
+  chat turn on a fresh instance. `text-embedding-3-small` is never selectable:
+  retrieval is not optional and the vector schema is fixed to its 1536 dimensions.
+  Trimming the set is the fastest way past a quota refusal on one model, and the
+  form says so. **The registry is app-side, so trimming does not shrink the admin
+  dropdown** — an admin can still pick a model this customer did not deploy and hit
+  the unknown-deployment failure. The form warns; the real fix is app-side (allow-list
+  env var, or the app listing the account's deployments), tracked as a TODO in
+  `mainTemplate.bicep`.
+- **AI quota gotcha**: model deployments draw on the *customer subscription's*
+  quota in `aiLocation`. Deployment fails without quota — the UI warns and links
+  the increase form; capacities are parameters. Quota is per-model **and per
+  deployment type**, so 8 deployments means 8 buckets per type, not one shared
+  pool — a subscription can hold a full GlobalStandard bucket for a model and a
+  hard 0 for DataZoneStandard on the same model, or the reverse. A zero limit
+  fails preflight with `InsufficientQuota ... the quota limit is 0`, and lowering
+  capacity does not help: the fix is the other deployment type, or a quota request
+  for that exact model/type pair.
+  `modelSku` exposes that choice at install (`GlobalStandard` default,
+  `DataZoneStandard` for EU/US data-zone residency and for parity with
+  `infrastructure/iac-ai-foundry`). It applies to the seven OpenAI-format
+  entries; `Mistral-Large-3` is pinned to `GlobalStandard`, as data-zone
+  deployment types are an Azure OpenAI concept — so a DataZoneStandard install
+  still serves Mistral globally, which the UI tooltip states.
   All 8 have a GlobalStandard bucket in `swedencentral`, verified live on
   2026-08-20 against both EdSpace subscriptions with
   `az cognitiveservices usage list -l swedencentral`. Note `Mistral-Large-3`

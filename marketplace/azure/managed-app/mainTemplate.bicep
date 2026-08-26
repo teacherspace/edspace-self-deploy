@@ -75,6 +75,50 @@ param enableAzureAi bool = true
 @description('Region for the AI account, decoupled from the app region for model availability.')
 param aiLocation string = 'swedencentral'
 
+// Quota is granted per model AND per deployment type: a subscription can hold a
+// healthy GlobalStandard bucket for a model and a hard 0 for DataZoneStandard on
+// that same model, or the reverse — the preflight then fails with
+// "InsufficientQuota ... the quota limit is 0". Making the type selectable lets an
+// install use whichever bucket the customer's subscription actually has, and
+// DataZoneStandard additionally keeps inference inside the data zone of aiLocation
+// (EU for swedencentral/westeurope), which is what EdSpace runs internally.
+@allowed(['GlobalStandard', 'DataZoneStandard'])
+@description('Deployment type for the model deployments. GlobalStandard has the widest model/region coverage; DataZoneStandard keeps inference inside the EU/US data zone of aiLocation. Quota is per model AND per deployment type — if a deploy reports a quota limit of 0, try the other type or request quota for the exact model/type pair named in the error. Mistral-Large-3 is always GlobalStandard.')
+param modelSku string = 'GlobalStandard'
+
+// Which of the catalog's chat/small models actually get deployed. The full set is
+// the default: the app's model dropdown is hardcoded (see `modelCatalog` below),
+// so anything left out is still offerable in AI settings and fails on selection.
+// Trimming is nonetheless the fastest fix for a customer whose subscription holds
+// no quota for one particular model — drop it instead of blocking the install.
+@allowed([
+  'gpt-5.1'
+  'gpt-5.4'
+  'gpt-5.6-sol'
+  'gpt-5.6-terra'
+  'gpt-5.6-luna'
+  'gpt-5-mini'
+  'Mistral-Large-3'
+])
+@description('Chat and small models to deploy on the AI account. Defaults to every model EdSpace can offer; trim it to save quota, accepting that admins can still pick a trimmed model in AI settings and hit an unknown-deployment error. The two default models below and text-embedding-3-small are deployed regardless.')
+param deployedModels array = [
+  'gpt-5.1'
+  'gpt-5.4'
+  'gpt-5.6-sol'
+  'gpt-5.6-terra'
+  'gpt-5.6-luna'
+  'gpt-5-mini'
+  'Mistral-Large-3'
+]
+
+@allowed(['gpt-5.1', 'gpt-5.4', 'gpt-5.6-sol', 'gpt-5.6-terra', 'Mistral-Large-3'])
+@description('Model EdSpace chats with out of the box (EDSPACE_LLM_TEXT_MODEL). Always deployed, whatever deployedModels contains. School admins can switch to any other deployed text model from AI settings.')
+param defaultTextModel string = 'gpt-5.6-sol'
+
+@allowed(['gpt-5.6-luna', 'gpt-5-mini', 'gpt-5.6-terra'])
+@description('Model EdSpace uses for background work — chat titles, classification, reranking (EDSPACE_LLM_SMALL_MODEL). Always deployed, whatever deployedModels contains.')
+param defaultSmallModel string = 'gpt-5.6-luna'
+
 // Model catalog versions are pinned inline on each entry in `modelDeployments`
 // below, sourced from infrastructure/iac-ai-foundry (the same set EdSpace runs
 // internally). They are deliberately NOT parameters: an unpinned deployment
@@ -316,67 +360,88 @@ resource aiAccount 'Microsoft.CognitiveServices/accounts@2025-09-01' = if (enabl
   }
 }
 
-// EVERY model a school admin can select in EdSpace's AI settings must exist here.
-// The app carries a hardcoded registry (`Edspace.LLM.Models`) that populates the
-// text-model dropdown and the backoffice small-model default; an admin picking a
-// model with no deployment behind it gets an unknown-deployment failure on the
-// next turn, with nothing in the install to hint at why. The list below is that
+// ---------------------------------------------------------------- model set
+// EVERY model a school admin can select in EdSpace's AI settings comes from the
+// app's hardcoded registry (`Edspace.LLM.Models`), which populates the text-model
+// dropdown and the backoffice small-model default. `modelCatalog` is that
 // registry — text models, small models and the embedding model — cross-checked
 // against infrastructure/iac-ai-foundry, which deploys the same set internally.
 //
+// The registry lives in the APP, so it does NOT shrink when an install deploys
+// fewer models: an admin picking a model this customer did not deploy still gets
+// an unknown-deployment failure on the next turn. The full catalog is therefore
+// the default, and `deployedModels` trims it only when the installer opts in with
+// that trade-off spelled out in the form.
+// TODO(edspace): let the app filter its dropdown to the deployed set (an
+// allow-list env var, or listing the account's deployments) so a trimmed install
+// cannot offer a model it cannot serve.
+//
 // `gpt-5.6-terra` appears in both the text and small registries; it is ONE
 // deployment serving both roles, hence 8 entries for 8 selectable models.
+//
+// `modelId` is the app-side identifier (`EDSPACE_LLM_*_MODEL`) and is NOT always
+// the deployment name — the registry routes `azure:mistral-large-3` to deployment
+// `Mistral-Large-3` — so every entry carries both.
 //
 // Deliberately absent, though infrastructure deploys them: `gpt-5.5` and
 // `text-embedding-3-large`. No app code path can reach either, and each would
 // draw customer quota for nothing. Add them here if the app registry gains them.
 //
-// SKU: infrastructure uses DataZoneStandard (EU data zone). Marketplace installs
-// land in the customer's own subscription and region, so GlobalStandard is the
-// portable choice — per-entry, because SKU availability is per-model and per-region.
-// A model that fails on SKU availability is a one-line change to its entry.
-var modelDeployments = [
+// SKU: `modelSku`, chosen by the customer at install. GlobalStandard is the
+// default because it has the widest model/region coverage; DataZoneStandard is
+// what infrastructure/iac-ai-foundry uses internally (EU data zone) and is the
+// pick for a customer who needs data-zone residency or whose subscription only
+// holds quota there. It stays per-entry because availability is per-model and
+// per-region: the non-OpenAI Mistral entry is pinned to GlobalStandard below,
+// and any other model that turns out not to offer the selected type is a
+// one-line change to its entry.
+var modelCatalog = [
   {
-    name: 'gpt-5.1'
+    deployment: 'gpt-5.1'
+    modelId: 'azure:gpt-5.1'
     capacity: textModelCapacity
-    sku: 'GlobalStandard'
+    sku: modelSku
     model: { format: 'OpenAI', name: 'gpt-5.1', version: '2025-11-13' }
   }
   {
-    // The app's default text model — `EDSPACE_LLM_TEXT_MODEL` is unset on a
-    // marketplace install, so every chat turn lands here unless an admin picks
-    // otherwise. Keep its capacity at or above the others.
-    name: 'gpt-5.4'
+    deployment: 'gpt-5.4'
+    modelId: 'azure:gpt-5.4'
     capacity: textModelCapacity
-    sku: 'GlobalStandard'
+    sku: modelSku
     model: { format: 'OpenAI', name: 'gpt-5.4', version: '2026-03-05' }
   }
   {
-    name: 'gpt-5.6-sol'
+    // The install default for chat (`defaultTextModel`) unless the form says
+    // otherwise, so on a stock install every chat turn lands here.
+    deployment: 'gpt-5.6-sol'
+    modelId: 'azure:gpt-5.6-sol'
     capacity: textModelCapacity
-    sku: 'GlobalStandard'
+    sku: modelSku
     model: { format: 'OpenAI', name: 'gpt-5.6-sol', version: '2026-07-09' }
   }
   {
-    // Selectable as a text model AND as the platform small-model default.
-    name: 'gpt-5.6-terra'
+    // Selectable as a text model AND as the platform small model.
+    deployment: 'gpt-5.6-terra'
+    modelId: 'azure:gpt-5.6-terra'
     capacity: textModelCapacity
-    sku: 'GlobalStandard'
+    sku: modelSku
     model: { format: 'OpenAI', name: 'gpt-5.6-terra', version: '2026-07-09' }
   }
   {
-    // Small-model only. Sized like a text model anyway: the same worst-case
-    // context reaches the reranker/classifier path.
-    name: 'gpt-5.6-luna'
+    // Small-model only, and the install default for background work. Sized like
+    // a text model anyway: the same worst-case context reaches the
+    // reranker/classifier path.
+    deployment: 'gpt-5.6-luna'
+    modelId: 'azure:gpt-5.6-luna'
     capacity: smallModelCapacity
-    sku: 'GlobalStandard'
+    sku: modelSku
     model: { format: 'OpenAI', name: 'gpt-5.6-luna', version: '2026-07-09' }
   }
   {
-    // The app's default small model (`EDSPACE_LLM_SMALL_MODEL`).
-    name: 'gpt-5-mini'
+    deployment: 'gpt-5-mini'
+    modelId: 'azure:gpt-5-mini'
     capacity: smallModelCapacity
-    sku: 'GlobalStandard'
+    sku: modelSku
     model: { format: 'OpenAI', name: 'gpt-5-mini', version: '2025-08-07' }
   }
   {
@@ -385,25 +450,55 @@ var modelDeployments = [
     // case-sensitive deployment name: the app's registry routes
     // `azure:mistral-large-3` to deployment `Mistral-Large-3`, and Azure
     // deployment names are case-sensitive.
-    name: 'Mistral-Large-3'
+    //
+    // Pinned to GlobalStandard rather than following `modelSku`: data-zone
+    // deployment types are an Azure OpenAI concept and this is the one entry
+    // that is not an OpenAI-format model. A DataZoneStandard install therefore
+    // serves Mistral globally — surfaced in the install UI and the README.
+    deployment: 'Mistral-Large-3'
+    modelId: 'azure:mistral-large-3'
     capacity: textModelCapacity
     sku: 'GlobalStandard'
     model: { format: 'Mistral AI', name: 'Mistral-Large-3', version: '1' }
   }
   {
     // 1536 dimensions — matches the app's fixed vector schema.
-    name: 'text-embedding-3-small'
+    deployment: 'text-embedding-3-small'
+    modelId: 'azure:text-embedding-3-small'
     capacity: embeddingModelCapacity
-    sku: 'GlobalStandard'
+    sku: modelSku
     model: { format: 'OpenAI', name: 'text-embedding-3-small', version: '1' }
   }
 ]
+
+// The embedding model is never selectable: retrieval is not optional and the
+// database schema is fixed to this model's 1536 dimensions.
+var embeddingModelDeployment = 'text-embedding-3-small'
+
+// Both install defaults are unioned back in, so no combination of form inputs or
+// CLI parameters can leave EDSPACE_LLM_TEXT_MODEL / _SMALL_MODEL pointing at a
+// deployment that was not created — the failure mode that would break every chat
+// turn on a freshly installed instance.
+var selectedModelDeployments = union(deployedModels, [
+  defaultTextModel
+  defaultSmallModel
+  embeddingModelDeployment
+])
+var modelDeployments = filter(modelCatalog, entry => contains(selectedModelDeployments, entry.deployment))
+
+// Deployment name -> app-side model ID. @allowed() on the parameters guarantees
+// every lookup hits a catalog entry, and `selectedModelDeployments` guarantees
+// that entry is actually created.
+var modelIds = toObject(modelCatalog, entry => entry.deployment, entry => entry.modelId)
+var defaultTextModelId = modelIds[defaultTextModel]
+var defaultSmallModelId = modelIds[defaultSmallModel]
+var embeddingModelId = modelIds[embeddingModelDeployment]
 
 @batchSize(1) // one account only supports serial deployment creation
 resource aiModelDeployments 'Microsoft.CognitiveServices/accounts/deployments@2025-09-01' = [
   for d in modelDeployments: if (enableAzureAi) {
     parent: aiAccount
-    name: d.name // deployment name == model name == EDSPACE_LLM_*_DEPLOYMENT value
+    name: d.deployment // deployment name == model name == EDSPACE_LLM_*_DEPLOYMENT value
     sku: {
       name: d.sku
       capacity: d.capacity
@@ -643,16 +738,18 @@ module app 'modules/containerApp.bicep' = {
     // (account endpoint vs .openai.azure.com) against internal App Config.
     #disable-next-line BCP318 // lazy if(): only dereferenced when enableAzureAi is true
     llmBaseUrl: enableAzureAi ? aiAccount.properties.endpoint : byoLlmBaseUrl
-    // Install defaults mirror the app's own (config/runtime.exs): gpt-5.6-sol for
-    // chat, gpt-5.6-luna for background work. Model ID and deployment name are set
-    // as a pair so they can never disagree — school admins can still switch to any
+    // Chosen in the form; the parameter defaults mirror the app's own
+    // (config/runtime.exs): gpt-5.6-sol for chat, gpt-5.6-luna for background
+    // work. Model ID and deployment name both come from the same catalog entry
+    // so they can never disagree, and the entry is guaranteed to be deployed
+    // (see `selectedModelDeployments`). School admins can still switch to any
     // other deployed model from AI settings.
-    llmTextModel: enableAzureAi ? 'azure:gpt-5.6-sol' : ''
-    llmTextDeployment: enableAzureAi ? 'gpt-5.6-sol' : byoLlmTextDeployment
-    llmSmallModel: enableAzureAi ? 'azure:gpt-5.6-luna' : ''
-    llmSmallDeployment: enableAzureAi ? 'gpt-5.6-luna' : byoLlmSmallDeployment
-    llmEmbeddingModel: enableAzureAi ? 'azure:text-embedding-3-small' : ''
-    llmEmbeddingDeployment: enableAzureAi ? 'text-embedding-3-small' : byoLlmEmbeddingDeployment
+    llmTextModel: enableAzureAi ? defaultTextModelId : ''
+    llmTextDeployment: enableAzureAi ? defaultTextModel : byoLlmTextDeployment
+    llmSmallModel: enableAzureAi ? defaultSmallModelId : ''
+    llmSmallDeployment: enableAzureAi ? defaultSmallModel : byoLlmSmallDeployment
+    llmEmbeddingModel: enableAzureAi ? embeddingModelId : ''
+    llmEmbeddingDeployment: enableAzureAi ? embeddingModelDeployment : byoLlmEmbeddingDeployment
     llmApiVersion: byoLlmApiVersion
 
     speechEnabled: enableAzureAi && enableSpeech

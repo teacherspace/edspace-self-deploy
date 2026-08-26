@@ -4,6 +4,7 @@
   "parameters": {
     "appSize": { "value": "standard" },
     "enableAzureAi": { "value": true },
+    "modelSku": { "value": "GlobalStandard" },
     "textModelCapacity": { "value": 10 },
     "smallModelCapacity": { "value": 10 },
     "embeddingModelCapacity": { "value": 10 },

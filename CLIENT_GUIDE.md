@@ -158,7 +158,9 @@ exactly (names are case-sensitive):
 | `text-embedding-3-small` | embeddings | must be 1536-dimension |
 
 Only the two defaults plus the embedding model are needed to run. Deploy the rest to
-make every entry in the admin dropdown work. Size each chat deployment's capacity
+make every entry in the admin dropdown work. (The Azure marketplace/template install
+asks you which of them to create, and always creates your two defaults plus the
+embedding model.) Size each chat deployment's capacity
 against your **largest single turn**, not average load: on Azure a deployment rated
 at N thousand tokens-per-minute cannot serve any single request larger than that, and
 a long conversation with a large PDF attached will exceed a small quota outright.

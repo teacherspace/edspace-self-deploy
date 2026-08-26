@@ -86,7 +86,7 @@
             "visible": "[steps('ai').enableAzureAi]",
             "options": {
               "icon": "Warning",
-              "text": "EdSpace deploys 8 models so every model your school admins can pick in AI settings works: gpt-5.1, gpt-5.4, gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna, gpt-5-mini, Mistral-Large-3 and text-embedding-3-small. Each draws on YOUR subscription's quota in the selected region, from its own per-model bucket. If deployment fails with a quota error, request quota for the model named in the error, or lower the capacities below.",
+              "text": "EdSpace deploys 8 models so every model your school admins can pick in AI settings works: gpt-5.1, gpt-5.4, gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna, gpt-5-mini, Mistral-Large-3 and text-embedding-3-small. Each draws on YOUR subscription's quota in the selected region, from its own bucket per model AND per deployment type. If deployment fails with \"the quota limit is 0\" for a model, your subscription has no quota for that model in that deployment type: switch the deployment type below, request quota for the exact model and type named in the error, or clear that model from the list below and deploy without it. Lowering the capacities does not help when the limit is 0.",
               "uri": "https://aka.ms/oai/quotaincrease"
             }
           },
@@ -102,6 +102,86 @@
                 { "label": "Sweden Central (recommended)", "value": "swedencentral" },
                 { "label": "West Europe", "value": "westeurope" },
                 { "label": "East US", "value": "eastus" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "modelSku",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Model deployment type",
+            "visible": "[steps('ai').enableAzureAi]",
+            "defaultValue": "Global Standard (widest availability)",
+            "toolTip": "Quota is granted per model AND per deployment type, so this is the first thing to change if the deployment fails with a quota limit of 0. Global Standard has the widest model and region coverage. Data Zone Standard keeps inference inside the data zone of the AI region above (EU for Sweden Central and West Europe, US for East US) and is what EdSpace runs internally; Mistral-Large-3 is Global Standard either way, as data zone deployment types apply to the OpenAI models only.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "Global Standard (widest availability)", "value": "GlobalStandard" },
+                { "label": "Data Zone Standard (EU/US data residency)", "value": "DataZoneStandard" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "deployedModels",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Models to deploy",
+            "visible": "[steps('ai').enableAzureAi]",
+            "multiselect": true,
+            "selectAll": true,
+            "filter": true,
+            "defaultValue": [
+              "gpt-5.1 (chat)",
+              "gpt-5.4 (chat)",
+              "gpt-5.6-sol (chat)",
+              "gpt-5.6-terra (chat and background)",
+              "gpt-5.6-luna (background)",
+              "gpt-5-mini (background)",
+              "Mistral-Large-3 (chat)"
+            ],
+            "toolTip": "Every model here is one your school admins can pick in EdSpace's AI settings. Clearing a model saves its quota — the quickest way past a quota refusal for one specific model — but EdSpace's model list is fixed in the application, so an admin can still select a model you did not deploy and that chat will fail. Leave the full set selected unless you have a reason not to. The two default models below are always deployed, and so is the embedding model text-embedding-3-small, which retrieval depends on.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "gpt-5.1 (chat)", "value": "gpt-5.1" },
+                { "label": "gpt-5.4 (chat)", "value": "gpt-5.4" },
+                { "label": "gpt-5.6-sol (chat)", "value": "gpt-5.6-sol" },
+                { "label": "gpt-5.6-terra (chat and background)", "value": "gpt-5.6-terra" },
+                { "label": "gpt-5.6-luna (background)", "value": "gpt-5.6-luna" },
+                { "label": "gpt-5-mini (background)", "value": "gpt-5-mini" },
+                { "label": "Mistral-Large-3 (chat)", "value": "Mistral-Large-3" }
+              ],
+              "required": false
+            }
+          },
+          {
+            "name": "defaultTextModel",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Default chat model",
+            "visible": "[steps('ai').enableAzureAi]",
+            "defaultValue": "gpt-5.6-sol (recommended)",
+            "toolTip": "The model EdSpace chats with until a school admin changes it in AI settings. Deployed whether or not it is ticked above.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "gpt-5.6-sol (recommended)", "value": "gpt-5.6-sol" },
+                { "label": "gpt-5.6-terra", "value": "gpt-5.6-terra" },
+                { "label": "gpt-5.4", "value": "gpt-5.4" },
+                { "label": "gpt-5.1", "value": "gpt-5.1" },
+                { "label": "Mistral-Large-3", "value": "Mistral-Large-3" }
+              ],
+              "required": true
+            }
+          },
+          {
+            "name": "defaultSmallModel",
+            "type": "Microsoft.Common.DropDown",
+            "label": "Default background model",
+            "visible": "[steps('ai').enableAzureAi]",
+            "defaultValue": "gpt-5.6-luna (recommended)",
+            "toolTip": "Used for chat titles, classification and reranking. Deployed whether or not it is ticked above.",
+            "constraints": {
+              "allowedValues": [
+                { "label": "gpt-5.6-luna (recommended)", "value": "gpt-5.6-luna" },
+                { "label": "gpt-5-mini", "value": "gpt-5-mini" },
+                { "label": "gpt-5.6-terra", "value": "gpt-5.6-terra" }
               ],
               "required": true
             }
@@ -449,6 +529,10 @@
       "pgStorageGB": "[steps('database').pgStorageGB]",
       "enableAzureAi": "[steps('ai').enableAzureAi]",
       "aiLocation": "[if(steps('ai').enableAzureAi, steps('ai').aiLocation, 'swedencentral')]",
+      "modelSku": "[if(steps('ai').enableAzureAi, steps('ai').modelSku, 'GlobalStandard')]",
+      "deployedModels": "[if(steps('ai').enableAzureAi, steps('ai').deployedModels, json('[]'))]",
+      "defaultTextModel": "[if(steps('ai').enableAzureAi, steps('ai').defaultTextModel, 'gpt-5.6-sol')]",
+      "defaultSmallModel": "[if(steps('ai').enableAzureAi, steps('ai').defaultSmallModel, 'gpt-5.6-luna')]",
       "textModelCapacity": "[if(steps('ai').enableAzureAi, int(steps('ai').textModelCapacity), 50)]",
       "smallModelCapacity": "[if(steps('ai').enableAzureAi, int(steps('ai').smallModelCapacity), 50)]",
       "embeddingModelCapacity": "[if(steps('ai').enableAzureAi, int(steps('ai').embeddingModelCapacity), 100)]",

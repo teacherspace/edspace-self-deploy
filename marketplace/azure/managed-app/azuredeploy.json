@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "14961744846611556149"
+      "templateHash": "14193608521903306152"
     }
   },
   "parameters": {
@@ -108,6 +108,67 @@
       "defaultValue": "swedencentral",
       "metadata": {
         "description": "Region for the AI account, decoupled from the app region for model availability."
+      }
+    },
+    "modelSku": {
+      "type": "string",
+      "defaultValue": "GlobalStandard",
+      "allowedValues": [
+        "GlobalStandard",
+        "DataZoneStandard"
+      ],
+      "metadata": {
+        "description": "Deployment type for the model deployments. GlobalStandard has the widest model/region coverage; DataZoneStandard keeps inference inside the EU/US data zone of aiLocation. Quota is per model AND per deployment type — if a deploy reports a quota limit of 0, try the other type or request quota for the exact model/type pair named in the error. Mistral-Large-3 is always GlobalStandard."
+      }
+    },
+    "deployedModels": {
+      "type": "array",
+      "defaultValue": [
+        "gpt-5.1",
+        "gpt-5.4",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
+        "gpt-5-mini",
+        "Mistral-Large-3"
+      ],
+      "allowedValues": [
+        "gpt-5.1",
+        "gpt-5.4",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "gpt-5.6-luna",
+        "gpt-5-mini",
+        "Mistral-Large-3"
+      ],
+      "metadata": {
+        "description": "Chat and small models to deploy on the AI account. Defaults to every model EdSpace can offer; trim it to save quota, accepting that admins can still pick a trimmed model in AI settings and hit an unknown-deployment error. The two default models below and text-embedding-3-small are deployed regardless."
+      }
+    },
+    "defaultTextModel": {
+      "type": "string",
+      "defaultValue": "gpt-5.6-sol",
+      "allowedValues": [
+        "gpt-5.1",
+        "gpt-5.4",
+        "gpt-5.6-sol",
+        "gpt-5.6-terra",
+        "Mistral-Large-3"
+      ],
+      "metadata": {
+        "description": "Model EdSpace chats with out of the box (EDSPACE_LLM_TEXT_MODEL). Always deployed, whatever deployedModels contains. School admins can switch to any other deployed text model from AI settings."
+      }
+    },
+    "defaultSmallModel": {
+      "type": "string",
+      "defaultValue": "gpt-5.6-luna",
+      "allowedValues": [
+        "gpt-5.6-luna",
+        "gpt-5-mini",
+        "gpt-5.6-terra"
+      ],
+      "metadata": {
+        "description": "Model EdSpace uses for background work — chat titles, classification, reranking (EDSPACE_LLM_SMALL_MODEL). Always deployed, whatever deployedModels contains."
       }
     },
     "textModelCapacity": {
@@ -345,11 +406,12 @@
     "appIdentityName": "[format('id-edspace-{0}', variables('suffix'))]",
     "aiAccountName": "[format('aif-edspace-{0}', variables('suffix'))]",
     "storageContainerName": "uploads",
-    "modelDeployments": [
+    "modelCatalog": [
       {
-        "name": "gpt-5.1",
+        "deployment": "gpt-5.1",
+        "modelId": "azure:gpt-5.1",
         "capacity": "[parameters('textModelCapacity')]",
-        "sku": "GlobalStandard",
+        "sku": "[parameters('modelSku')]",
         "model": {
           "format": "OpenAI",
           "name": "gpt-5.1",
@@ -357,9 +419,10 @@
         }
       },
       {
-        "name": "gpt-5.4",
+        "deployment": "gpt-5.4",
+        "modelId": "azure:gpt-5.4",
         "capacity": "[parameters('textModelCapacity')]",
-        "sku": "GlobalStandard",
+        "sku": "[parameters('modelSku')]",
         "model": {
           "format": "OpenAI",
           "name": "gpt-5.4",
@@ -367,9 +430,10 @@
         }
       },
       {
-        "name": "gpt-5.6-sol",
+        "deployment": "gpt-5.6-sol",
+        "modelId": "azure:gpt-5.6-sol",
         "capacity": "[parameters('textModelCapacity')]",
-        "sku": "GlobalStandard",
+        "sku": "[parameters('modelSku')]",
         "model": {
           "format": "OpenAI",
           "name": "gpt-5.6-sol",
@@ -377,9 +441,10 @@
         }
       },
       {
-        "name": "gpt-5.6-terra",
+        "deployment": "gpt-5.6-terra",
+        "modelId": "azure:gpt-5.6-terra",
         "capacity": "[parameters('textModelCapacity')]",
-        "sku": "GlobalStandard",
+        "sku": "[parameters('modelSku')]",
         "model": {
           "format": "OpenAI",
           "name": "gpt-5.6-terra",
@@ -387,9 +452,10 @@
         }
       },
       {
-        "name": "gpt-5.6-luna",
+        "deployment": "gpt-5.6-luna",
+        "modelId": "azure:gpt-5.6-luna",
         "capacity": "[parameters('smallModelCapacity')]",
-        "sku": "GlobalStandard",
+        "sku": "[parameters('modelSku')]",
         "model": {
           "format": "OpenAI",
           "name": "gpt-5.6-luna",
@@ -397,9 +463,10 @@
         }
       },
       {
-        "name": "gpt-5-mini",
+        "deployment": "gpt-5-mini",
+        "modelId": "azure:gpt-5-mini",
         "capacity": "[parameters('smallModelCapacity')]",
-        "sku": "GlobalStandard",
+        "sku": "[parameters('modelSku')]",
         "model": {
           "format": "OpenAI",
           "name": "gpt-5-mini",
@@ -407,7 +474,8 @@
         }
       },
       {
-        "name": "Mistral-Large-3",
+        "deployment": "Mistral-Large-3",
+        "modelId": "azure:mistral-large-3",
         "capacity": "[parameters('textModelCapacity')]",
         "sku": "GlobalStandard",
         "model": {
@@ -417,9 +485,10 @@
         }
       },
       {
-        "name": "text-embedding-3-small",
+        "deployment": "text-embedding-3-small",
+        "modelId": "azure:text-embedding-3-small",
         "capacity": "[parameters('embeddingModelCapacity')]",
-        "sku": "GlobalStandard",
+        "sku": "[parameters('modelSku')]",
         "model": {
           "format": "OpenAI",
           "name": "text-embedding-3-small",
@@ -427,6 +496,13 @@
         }
       }
     ],
+    "embeddingModelDeployment": "text-embedding-3-small",
+    "selectedModelDeployments": "[union(parameters('deployedModels'), createArray(parameters('defaultTextModel'), parameters('defaultSmallModel'), variables('embeddingModelDeployment')))]",
+    "modelDeployments": "[filter(variables('modelCatalog'), lambda('entry', contains(variables('selectedModelDeployments'), lambdaVariables('entry').deployment)))]",
+    "modelIds": "[toObject(variables('modelCatalog'), lambda('entry', lambdaVariables('entry').deployment), lambda('entry', lambdaVariables('entry').modelId))]",
+    "defaultTextModelId": "[variables('modelIds')[parameters('defaultTextModel')]]",
+    "defaultSmallModelId": "[variables('modelIds')[parameters('defaultSmallModel')]]",
+    "embeddingModelId": "[variables('modelIds')[variables('embeddingModelDeployment')]]",
     "pgAdminPassword": "[format('E1!{0}', replace(parameters('pgPasswordSeed'), '-', ''))]",
     "mailFromEmailChecked": "[if(and(not(equals(parameters('mailerAdapter'), 'none')), empty(parameters('mailFromEmail'))), fail('mailFromEmail is required unless mailerAdapter is \"none\".'), parameters('mailFromEmail'))]",
     "mailSmtpRelayChecked": "[if(and(equals(parameters('mailerAdapter'), 'smtp'), empty(parameters('mailSmtpRelay'))), fail('mailSmtpRelay is required when mailerAdapter is \"smtp\".'), parameters('mailSmtpRelay'))]",
@@ -552,7 +628,7 @@
       "condition": "[parameters('enableAzureAi')]",
       "type": "Microsoft.CognitiveServices/accounts/deployments",
       "apiVersion": "2025-09-01",
-      "name": "[format('{0}/{1}', variables('aiAccountName'), variables('modelDeployments')[copyIndex()].name)]",
+      "name": "[format('{0}/{1}', variables('aiAccountName'), variables('modelDeployments')[copyIndex()].deployment)]",
       "sku": {
         "name": "[variables('modelDeployments')[copyIndex()].sku]",
         "capacity": "[variables('modelDeployments')[copyIndex()].capacity]"
@@ -953,12 +1029,12 @@
             "value": "[listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName')), '2025-01-01').keys[0].value]"
           },
           "llmBaseUrl": "[if(parameters('enableAzureAi'), createObject('value', reference(resourceId('Microsoft.CognitiveServices/accounts', variables('aiAccountName')), '2025-09-01').endpoint), createObject('value', parameters('byoLlmBaseUrl')))]",
-          "llmTextModel": "[if(parameters('enableAzureAi'), createObject('value', 'azure:gpt-5.6-sol'), createObject('value', ''))]",
-          "llmTextDeployment": "[if(parameters('enableAzureAi'), createObject('value', 'gpt-5.6-sol'), createObject('value', parameters('byoLlmTextDeployment')))]",
-          "llmSmallModel": "[if(parameters('enableAzureAi'), createObject('value', 'azure:gpt-5.6-luna'), createObject('value', ''))]",
-          "llmSmallDeployment": "[if(parameters('enableAzureAi'), createObject('value', 'gpt-5.6-luna'), createObject('value', parameters('byoLlmSmallDeployment')))]",
-          "llmEmbeddingModel": "[if(parameters('enableAzureAi'), createObject('value', 'azure:text-embedding-3-small'), createObject('value', ''))]",
-          "llmEmbeddingDeployment": "[if(parameters('enableAzureAi'), createObject('value', 'text-embedding-3-small'), createObject('value', parameters('byoLlmEmbeddingDeployment')))]",
+          "llmTextModel": "[if(parameters('enableAzureAi'), createObject('value', variables('defaultTextModelId')), createObject('value', ''))]",
+          "llmTextDeployment": "[if(parameters('enableAzureAi'), createObject('value', parameters('defaultTextModel')), createObject('value', parameters('byoLlmTextDeployment')))]",
+          "llmSmallModel": "[if(parameters('enableAzureAi'), createObject('value', variables('defaultSmallModelId')), createObject('value', ''))]",
+          "llmSmallDeployment": "[if(parameters('enableAzureAi'), createObject('value', parameters('defaultSmallModel')), createObject('value', parameters('byoLlmSmallDeployment')))]",
+          "llmEmbeddingModel": "[if(parameters('enableAzureAi'), createObject('value', variables('embeddingModelId')), createObject('value', ''))]",
+          "llmEmbeddingDeployment": "[if(parameters('enableAzureAi'), createObject('value', variables('embeddingModelDeployment')), createObject('value', parameters('byoLlmEmbeddingDeployment')))]",
           "llmApiVersion": {
             "value": "[parameters('byoLlmApiVersion')]"
           },

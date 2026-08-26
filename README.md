@@ -31,7 +31,7 @@ You will need:
 
 - the `edspace.azurecr.io` registry credentials from your EdSpace welcome email,
 - a way to send transactional email, or the decision not to: a [MailPace](https://mailpace.com) API key (default), an SMTP relay, or *Email backend: none* — all three are offered by the form and the template alike; see [docs/configuration.md](docs/configuration.md#transactional-email) for what each mode means,
-- if enabling Azure AI: available Azure OpenAI GlobalStandard quota in the AI region you pick.
+- if enabling Azure AI: available Azure OpenAI quota in the AI region you pick, for the deployment type you pick. Quota is granted per model *and* per deployment type — the form offers **Global Standard** (widest availability, the default) and **Data Zone Standard** (EU/US data residency); if a deploy fails with a quota limit of 0 for a model, switch type or request quota for that exact model/type pair.
 - if enabling Microsoft sign-in: an Entra app registration (tenant ID, client ID, client secret) — the form's *Sign-in* step explains the redirect URI to register; details in [marketplace/azure/managed-app/README.md](marketplace/azure/managed-app/README.md#deploy-from-the-cli-self-managed).
 
 What gets deployed into your resource group:
@@ -41,7 +41,7 @@ What gets deployed into your resource group:
 - **Key Vault** (`kv-eds-<suffix>`): holds all generated and supplied secrets — purge protection on, see [docs/limitations.md](docs/limitations.md) before deleting/redeploying
 - **Storage account**: private `uploads` blob container for file storage
 - **Log Analytics**: receives the app's console logs (30-day retention)
-- **Azure AI Foundry** *(optional)*: AI account plus the 8 model deployments selectable in EdSpace's AI settings
+- **Azure AI Foundry** *(optional)*: AI account plus model deployments — by default all 8 that are selectable in EdSpace's AI settings, or the subset you tick in the form (your two default models and the embedding model are always deployed)
 
 After deployment succeeds:
 
