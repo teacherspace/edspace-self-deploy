@@ -217,7 +217,8 @@ param pgPasswordSeed string = newGuid()
 // ------------------------------------------------------------------- naming
 var suffix = uniqueString(resourceGroup().id) // stable per instance -> idempotent re-deploys
 // Exact, publisher-owned discovery marker. Customer-supplied tags are retained.
-var resourceTags = union(tags, { 'edspace.io/product': 'edspace' })
+// No '/' in the key: ARM rejects it for non-hidden tags (InvalidTagNameCharacters).
+var resourceTags = union(tags, { 'edspace-product': 'edspace' })
 
 var logAnalyticsName = 'log-edspace-${suffix}'
 var acaEnvName = 'cae-edspace-${suffix}'

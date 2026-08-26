@@ -10,11 +10,11 @@
         "commands": [
           {
             "displayName": "EdSpace documentation",
-            "path": "https://edspace.io/docs"
+            "path": "https://github.com/teacherspace/edspace-self-deploy/blob/main/CLIENT_GUIDE.md"
           },
           {
             "displayName": "Contact support",
-            "path": "https://edspace.io/support"
+            "path": "https://github.com/teacherspace/edspace-self-deploy/issues"
           }
         ]
       }

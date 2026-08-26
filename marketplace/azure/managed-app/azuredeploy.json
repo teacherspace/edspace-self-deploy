@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "6960793958129592972"
+      "templateHash": "14961744846611556149"
     }
   },
   "parameters": {
@@ -336,7 +336,7 @@
   },
   "variables": {
     "suffix": "[uniqueString(resourceGroup().id)]",
-    "resourceTags": "[union(parameters('tags'), createObject('edspace.io/product', 'edspace'))]",
+    "resourceTags": "[union(parameters('tags'), createObject('edspace-product', 'edspace'))]",
     "logAnalyticsName": "[format('log-edspace-{0}', variables('suffix'))]",
     "acaEnvName": "[format('cae-edspace-{0}', variables('suffix'))]",
     "pgServerName": "[format('pg-edspace-{0}', variables('suffix'))]",
