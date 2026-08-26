@@ -54,6 +54,14 @@ case "$CONTAINER_IMAGE" in
     exit 1
     ;;
 esac
+# The customer registry tags images with the bare version (`1.0.1`), while git
+# tags carry a `v`. The 1.0.1 button shipped `:v1.0.1`, which no registry
+# held, and every install sat in ImagePullBackOff. Accept only the registry's
+# scheme or a digest; `scripts/check-image.sh` confirms the tag really exists.
+if ! [[ $CONTAINER_IMAGE =~ :[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.]+)?$ || $CONTAINER_IMAGE =~ @sha256:[0-9a-fA-F]{64}$ ]]; then
+  echo "container-image.txt must pin a bare semver tag (e.g. :1.0.2, no 'v') or a digest: ${CONTAINER_IMAGE}" >&2
+  exit 1
+fi
 
 echo "version=${CHART_VERSION}"
 echo "appVersion=${APP_VERSION}"

@@ -1,0 +1,118 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.44.1.10279",
+      "templateHash": "12761395411420478525"
+    }
+  },
+  "parameters": {
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "containerImage": {
+      "type": "string",
+      "defaultValue": "edspace.azurecr.io/edspace/edspace:1.0.2",
+      "metadata": {
+        "description": "Release image. The default is the pin this template was built with; customers normally leave it alone."
+      }
+    },
+    "containerAppName": {
+      "type": "string",
+      "defaultValue": "edspace",
+      "metadata": {
+        "description": "Name of the Container App created by the install template."
+      }
+    },
+    "forceUpdateTag": {
+      "type": "string",
+      "defaultValue": "[utcNow()]"
+    }
+  },
+  "variables": {
+    "$fxv#0": "#!/usr/bin/env bash\n# Body of the deployment script in update.bicep (inlined by loadTextContent).\n# Runs inside the Azure CLI deployment-script container as the updater\n# identity. Inputs: APP, RG, IMAGE. Writes outputs to $AZ_SCRIPTS_OUTPUT_PATH.\nset -euo pipefail\n\necho \"Updating container app '$APP' in '$RG' to $IMAGE\"\n\n# A role assignment made seconds ago is not always visible to ARM yet; the\n# first calls can 403. Retry for a few minutes rather than fail the button.\nfor attempt in $(seq 1 12); do\n  if PREV=$(az containerapp show -n \"$APP\" -g \"$RG\" \\\n      --query 'properties.template.containers[0].image' -o tsv 2>/dev/null); then\n    break\n  fi\n  echo \"waiting for role assignment to propagate ($attempt/12)\"\n  sleep 15\ndone\n[ -n \"${PREV:-}\" ] || { echo \"cannot read container app $APP in $RG\" >&2; exit 1; }\necho \"current image: $PREV\"\n\naz containerapp update -n \"$APP\" -g \"$RG\" --image \"$IMAGE\" -o none\nLATEST=$(az containerapp show -n \"$APP\" -g \"$RG\" --query properties.latestRevisionName -o tsv)\necho \"new revision: $LATEST\"\n\n# The startup probe allows 5 minutes of migrations (60 x 5 s), plus image\n# pull. Poll well past that before calling it failed.\nfor attempt in $(seq 1 60); do\n  STATE=$(az containerapp revision show -n \"$APP\" -g \"$RG\" --revision \"$LATEST\" \\\n    --query '[properties.runningState, properties.healthState]' -o tsv | tr '\\n' ' ')\n  echo \"revision $LATEST: $STATE\"\n  case \"$STATE\" in\n    *Running*Healthy*) break ;;\n    *Failed*|*ActivationFailed*|*Degraded*)\n      echo \"revision $LATEST did not become healthy; the previous revision keeps serving.\" >&2\n      az containerapp revision show -n \"$APP\" -g \"$RG\" --revision \"$LATEST\" \\\n        --query 'properties.runningStateDetails' -o tsv >&2 || true\n      az containerapp replica list -n \"$APP\" -g \"$RG\" --revision \"$LATEST\" \\\n        --query '[].properties.containers[].runningStateDetails' -o tsv >&2 || true\n      exit 1 ;;\n  esac\n  sleep 10\ndone\ncase \"$STATE\" in\n  *Running*Healthy*) ;;\n  *) echo \"timed out waiting for revision $LATEST (last state: $STATE)\" >&2; exit 1 ;;\nesac\n\necho \"update complete: $PREV -> $IMAGE\"\njq -n --arg prev \"$PREV\" --arg new \"$IMAGE\" --arg rev \"$LATEST\" \\\n  '{previousImage: $prev, newImage: $new, revision: $rev}' > \"$AZ_SCRIPTS_OUTPUT_PATH\"\n",
+    "suffix": "[uniqueString(resourceGroup().id)]",
+    "imageChecked": "[if(or(endsWith(parameters('containerImage'), ':latest'), not(contains(parameters('containerImage'), ':'))), fail('containerImage must be an immutable release tag or digest, not \":latest\" or untagged'), parameters('containerImage'))]"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2024-11-30",
+      "name": "[format('id-edspace-updater-{0}', variables('suffix'))]",
+      "location": "[parameters('location')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "name": "[guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-edspace-updater-{0}', variables('suffix'))), 'ContainerAppsContributor')]",
+      "properties": {
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '358470bc-b998-42bd-ab17-a7e34c199c0f')]",
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-edspace-updater-{0}', variables('suffix'))), '2024-11-30').principalId]",
+        "principalType": "ServicePrincipal"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-edspace-updater-{0}', variables('suffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.Resources/deploymentScripts",
+      "apiVersion": "2023-08-01",
+      "name": "edspace-update",
+      "location": "[parameters('location')]",
+      "kind": "AzureCLI",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-edspace-updater-{0}', variables('suffix'))))]": {}
+        }
+      },
+      "properties": {
+        "azCliVersion": "2.86.0",
+        "forceUpdateTag": "[parameters('forceUpdateTag')]",
+        "timeout": "PT30M",
+        "retentionInterval": "PT1H",
+        "cleanupPreference": "OnSuccess",
+        "environmentVariables": [
+          {
+            "name": "APP",
+            "value": "[parameters('containerAppName')]"
+          },
+          {
+            "name": "RG",
+            "value": "[resourceGroup().name]"
+          },
+          {
+            "name": "IMAGE",
+            "value": "[variables('imageChecked')]"
+          }
+        ],
+        "scriptContent": "[variables('$fxv#0')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-edspace-updater-{0}', variables('suffix')))]",
+        "[resourceId('Microsoft.Authorization/roleAssignments', guid(resourceGroup().id, resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-edspace-updater-{0}', variables('suffix'))), 'ContainerAppsContributor'))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "previousImage": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deploymentScripts', 'edspace-update'), '2023-08-01').outputs.previousImage]"
+    },
+    "newImage": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deploymentScripts', 'edspace-update'), '2023-08-01').outputs.newImage]"
+    },
+    "revision": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Resources/deploymentScripts', 'edspace-update'), '2023-08-01').outputs.revision]"
+    },
+    "appUrl": {
+      "type": "string",
+      "value": "[format('https://{0}', reference(resourceId('Microsoft.App/containerApps', parameters('containerAppName')), '2025-01-01').configuration.ingress.fqdn)]"
+    }
+  }
+}

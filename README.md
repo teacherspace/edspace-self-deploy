@@ -61,7 +61,40 @@ After deployment succeeds:
    for seven days and asks the admin to set a password. Full onboarding details:
    [CLIENT_GUIDE.md](CLIENT_GUIDE.md#manual-user-creation).
 3. If you enabled Microsoft sign-in, make sure the `microsoftRedirectUri` output is registered in the Entra app registration's redirect URIs — the button will not work until it matches.
-4. To update later: `az containerapp update -n edspace -g <resource-group> --image edspace.azurecr.io/edspace/edspace:<new tag>`.
+4. To update later, see [Updating (Azure — one-click)](#updating-azure--one-click).
+
+### Updating (Azure — one-click)
+
+[![Update EdSpace](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fteacherspace%2Fedspace-self-deploy%2Fmain%2Fmarketplace%2Fazure%2Fmanaged-app%2Fupdate.json)
+
+Each EdSpace release updates this button to the released image. Click it,
+pick the **resource group you deployed into**, and leave *Container Image* at
+its default — it is pinned to the release. Nothing else is asked, and nothing
+else is touched: the template runs `az containerapp update --image` through a
+short-lived deployment script and waits for the new revision to pass its
+health checks (up to ~10 minutes; migrations run before the app binds its
+port). Traffic moves to the new version only once it is healthy; if it never
+gets there, the previous version keeps serving and the deployment fails with
+the container's status in the script output.
+
+The first run creates a small updater identity (`id-edspace-updater-…`) with
+*Container Apps Contributor* on the resource group, so the person clicking
+needs Owner on it (the same right the install needed). Later runs reuse it.
+
+The same thing from the CLI:
+
+```sh
+az deployment group create -g <resource-group> \
+  -u https://raw.githubusercontent.com/teacherspace/edspace-self-deploy/main/marketplace/azure/managed-app/update.json
+# or, without the template, to any tag:
+az containerapp update -n edspace -g <resource-group> --image edspace.azurecr.io/edspace/edspace:<version>
+```
+
+Registry tags are the bare version (`1.0.2`) — the `v` is only on the git
+release tag. Confirm what is live afterwards with `GET /version`. Rollback:
+`az containerapp revision activate` on the previous revision — safe for one
+version, since releases keep the database schema backward-compatible with the
+previous app version.
 
 Prefer the CLI over the portal? See "Deploy from the CLI" in
 [`marketplace/azure/managed-app/README.md`](marketplace/azure/managed-app/README.md),

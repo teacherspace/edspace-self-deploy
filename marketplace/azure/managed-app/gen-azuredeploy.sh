@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Generate (or verify) the committed azuredeploy.json that the README's
-# "Deploy to Azure" button serves via raw.githubusercontent.com.
+# Generate (or verify) the committed azuredeploy.json and update.json that the
+# README's "Deploy to Azure" and "Update EdSpace" buttons serve via
+# raw.githubusercontent.com.
 #
 # Usage: ./gen-azuredeploy.sh [--check]
 #
@@ -30,8 +31,14 @@ if [ "$CHECK" = 1 ]; then
     echo "azuredeploy.json is stale — run 'make bicep-gen' and commit the result" >&2
     exit 1
   fi
-  echo "azuredeploy.json is current"
+  if ! diff <(normalize dist/update.json) <(normalize update.json); then
+    echo "update.json is stale — run 'make bicep-gen' and commit the result" >&2
+    exit 1
+  fi
+  echo "azuredeploy.json and update.json are current"
 else
   cp dist/mainTemplate.json azuredeploy.json
+  cp dist/update.json update.json
   echo "wrote azuredeploy.json ($(jq -r '.parameters.containerImage.defaultValue' azuredeploy.json))"
+  echo "wrote update.json ($(jq -r '.parameters.containerImage.defaultValue' update.json))"
 fi

@@ -4,7 +4,7 @@
 CHART := chart/edspace
 CI_VALUES := $(wildcard $(CHART)/ci/*.yaml)
 
-.PHONY: gen check parity lint test-validation template package bicep bicep-gen bicep-check compose-config clean
+.PHONY: gen check parity lint test-validation template package bicep bicep-gen bicep-check image-check compose-config clean
 
 gen:
 	uv run scripts/gen.py
@@ -44,6 +44,11 @@ bicep-gen:
 
 bicep-check:
 	cd marketplace/azure/managed-app && ./gen-azuredeploy.sh --check
+
+# Confirms the pinned image exists in the customer registry (needs `az login`).
+# Run before tagging a release: the templates are only as good as their pin.
+image-check:
+	bash scripts/check-image.sh
 
 # Mirrors the CI compose job (.env from the example plus the three values the
 # ${VAR:?} guards require), in a scratch dir so a real compose/.env is untouched.

@@ -14,6 +14,17 @@ directly into a customer-owned resource group (self-managed — no managed-app
 wrapper, no publisher access, customer runs their own updates). See the
 root README's "Quickstart (Azure — one-click)".
 
+[![Update EdSpace](https://aka.ms/deploytoazurebutton)](https://portal.azure.com/#create/Microsoft.Template/uri/https%3A%2F%2Fraw.githubusercontent.com%2Fteacherspace%2Fedspace-self-deploy%2Fmain%2Fmarketplace%2Fazure%2Fmanaged-app%2Fupdate.json)
+
+Self-managed instances update with the second button, backed by
+[`update.json`](update.json) (compiled from [`update.bicep`](update.bicep) +
+[`update.sh`](update.sh)): a deployment script that runs `az containerapp
+update --image <release pin>` as a scoped identity and waits for the new
+revision to become healthy. It takes no install parameters and never touches
+secrets — a full `azuredeploy.json` redeploy is the wrong tool for a routine
+release (see the secret model below). Customer-facing instructions live in the
+root README, "Updating (Azure — one-click)".
+
 ## Deploy from the CLI (self-managed)
 
 The same template deploys without the portal.
@@ -99,12 +110,31 @@ The image baked into the template defaults to the pin in
 build refuses mutable `latest` or untagged references. Customers are never
 asked for the image value.
 
-Committed artifact: `azuredeploy.json` is the compiled, image-patched copy of
-`mainTemplate.bicep` that the Deploy-to-Azure button serves from
-raw.githubusercontent.com. Regenerate it with `make bicep-gen` after changing
-the Bicep or `container-image.txt`; CI (`make bicep-check`) and the release
-workflow enforce freshness, and `scripts/release-guard.sh` refuses tags with a
+Committed artifacts: `azuredeploy.json` and `update.json` are the compiled,
+image-patched copies of `mainTemplate.bicep` and `update.bicep` that the
+Deploy-to-Azure and Update buttons serve from raw.githubusercontent.com.
+Regenerate both with `make bicep-gen` after changing the Bicep or
+`container-image.txt`; CI (`make bicep-check`) and the release workflow
+enforce freshness, and `scripts/release-guard.sh` refuses tags with a
 dev/floating pin.
+
+**The pin's tag scheme is the registry's, not git's.** The app repo's
+customer-release pipeline strips the `v` from the release tag when it copies
+the image (`v1.0.2` → `edspace.azurecr.io/edspace/edspace:1.0.2`), so
+`container-image.txt` must read `:1.0.2`. The guard rejects a `v` pin, and
+`make image-check` (needs `az login`) confirms the pinned tag actually exists
+before a release is cut — a template that pins a missing tag deploys
+"successfully" and then sits in `ImagePullBackOff` behind an ACA ingress that
+just hangs.
+
+Release checklist for a new app version `vX.Y.Z`:
+
+1. Wait for the app repo's `customer-release` pipeline to publish `X.Y.Z` to
+   the registry (`make image-check` after editing the pin below says so).
+2. Set `container-image.txt` to `edspace.azurecr.io/edspace/edspace:X.Y.Z`.
+3. `make bicep-gen && make image-check`, commit `container-image.txt`,
+   `azuredeploy.json` and `update.json`.
+4. Once on `main`, both buttons serve the new release.
 
 ARM-TTK (the test suite marketplace certification runs) is enforced in CI on
 every change, against both the built template and `createUiDefinition.json` —
@@ -174,7 +204,7 @@ will be authorized on the test definition; it rejects missing/zero values.
 | Operation | Mechanism | bootstrapSecrets |
 |---|---|---|
 | New install | Marketplace / Service Catalog | `true` (UI pins it) |
-| Routine app update | `az containerapp update --image <tag>` | n/a — template untouched |
+| Routine app update | "Update EdSpace" button (`update.json`) or `az containerapp update --image <tag>` | n/a — install template untouched |
 | Infra change to an existing instance | `az deployment group create` on the managed RG | **`false` — mandatory** |
 | Marketplace definition version | New installs only — never pushed onto existing instances | — |
 

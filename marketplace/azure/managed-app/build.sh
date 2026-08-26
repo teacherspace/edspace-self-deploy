@@ -46,6 +46,21 @@ if grep -Eq '__[A-Z0-9_]+__' dist/mainTemplate.json; then
   exit 2
 fi
 
+# The update template (README "Update EdSpace" button) carries the same pin:
+# the button must move customers to the release this package was cut for.
+echo "== az bicep build (update template)"
+az bicep build --file update.bicep --outfile dist/update.json
+PATCHED_TEMPLATE=$(mktemp)
+jq --arg image "$EDSPACE_CONTAINER_IMAGE" \
+  '.parameters.containerImage.defaultValue = $image' \
+  dist/update.json > "$PATCHED_TEMPLATE"
+mv "$PATCHED_TEMPLATE" dist/update.json
+PATCHED_TEMPLATE=""
+if grep -Eq '__[A-Z0-9_]+__' dist/update.json; then
+  echo "compiled update template still contains an unreplaced publisher token" >&2
+  exit 2
+fi
+
 echo "== validating JSON assets"
 python3 -m json.tool createUiDefinition.json >/dev/null
 python3 -m json.tool viewDefinition.json >/dev/null

@@ -13,6 +13,7 @@ Startup allows up to 150 s because the server runs pending database migrations b
 - Rolling deploys drain WebSockets gracefully in batches (~30 s budget); `lifecycle.terminationGracePeriodSeconds` (default 45) must stay above `SOCKET_DRAINER_SHUTDOWN_MS`.
 - Config changes roll pods automatically via checksum annotations — no Reloader needed.
 - **Rollback**: `helm rollback` restores the previous image, but migrations are forward-only. EdSpace releases keep the schema backward-compatible with the previous app version; skipping several versions and rolling back is not supported.
+- **Azure (Container Apps, self-managed)**: use the "Update EdSpace" button in the root README (or `az containerapp update --image edspace.azurecr.io/edspace/edspace:<version>`). The app runs in single-revision mode: the new revision receives traffic only after its startup/readiness probes pass, and a failed one leaves the old revision serving. Rollback is `az containerapp revision activate --revision <previous>`, with the same one-version schema caveat. Registry tags are the bare version (`1.0.2`); the `v` is only on the git tag.
 
 ## Scaling and clustering
 
