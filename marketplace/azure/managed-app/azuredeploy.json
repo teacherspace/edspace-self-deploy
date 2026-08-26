@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.46.1.21595",
-      "templateHash": "11200127099037330372"
+      "templateHash": "13903400956168179001"
     }
   },
   "parameters": {
@@ -393,9 +393,24 @@
       "metadata": {
         "description": "Entropy seed for the generated PostgreSQL admin password. Leave at the default; only read when bootstrapSecrets is true."
       }
+    },
+    "setupTokenIssuedAt": {
+      "type": "string",
+      "defaultValue": "[utcNow('yyyyMMddHHmmss')]",
+      "metadata": {
+        "description": "Issue time of the first-run setup token. Leave at the default."
+      }
+    },
+    "setupTokenSeed": {
+      "type": "string",
+      "defaultValue": "[newGuid()]",
+      "metadata": {
+        "description": "Entropy for the first-run setup token. Leave at the default."
+      }
     }
   },
   "variables": {
+    "setupToken": "[format('{0}.{1}', parameters('setupTokenIssuedAt'), replace(parameters('setupTokenSeed'), '-', ''))]",
     "suffix": "[uniqueString(resourceGroup().id)]",
     "resourceTags": "[union(parameters('tags'), createObject('edspace-product', 'edspace'))]",
     "logAnalyticsName": "[format('log-edspace-{0}', variables('suffix'))]",
@@ -1017,6 +1032,9 @@
           },
           "phxHost": "[if(empty(parameters('customDomain')), createObject('value', format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain)), createObject('value', parameters('customDomain')))]",
           "checkOrigin": "[if(empty(parameters('customDomain')), createObject('value', format('https://{0}', format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain))), createObject('value', format('https://{0},https://{1}', parameters('customDomain'), format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain))))]",
+          "setupToken": {
+            "value": "[variables('setupToken')]"
+          },
           "keyVaultUri": {
             "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2025-05-01').vaultUri]"
           },
@@ -1093,7 +1111,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.46.1.21595",
-              "templateHash": "9359456604270474578"
+              "templateHash": "9618553995252827632"
             }
           },
           "parameters": {
@@ -1125,6 +1143,9 @@
               "type": "string"
             },
             "checkOrigin": {
+              "type": "string"
+            },
+            "setupToken": {
               "type": "string"
             },
             "keyVaultUri": {
@@ -1269,7 +1290,7 @@
               }
             },
             "vaultSecretNames": "[concat(createArray('secret-key-base', 'token-signing-secret', 'database-url', 'registry-password'), if(parameters('useAiAccountKey'), createArray(), createArray('llm-api-key')), if(equals(parameters('mailerAdapter'), 'mailpace'), createArray('mailpace-api-key'), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createArray('smtp-password'), createArray()), if(parameters('enableMicrosoftSso'), createArray('microsoft-client-secret'), createArray()))]",
-            "secrets": "[concat(variables('vaultSecrets'), createArray(createObject('name', 'azure-storage-key', 'value', parameters('storageAccountKey'))), if(parameters('useAiAccountKey'), createArray(createObject('name', 'llm-api-key', 'value', parameters('llmApiKeyFromAi'))), createArray()), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'azure-speech-key', 'value', parameters('speechKey')))))]",
+            "secrets": "[concat(variables('vaultSecrets'), createArray(createObject('name', 'azure-storage-key', 'value', parameters('storageAccountKey'))), createArray(createObject('name', 'setup-token', 'value', parameters('setupToken'))), if(parameters('useAiAccountKey'), createArray(createObject('name', 'llm-api-key', 'value', parameters('llmApiKeyFromAi'))), createArray()), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'azure-speech-key', 'value', parameters('speechKey')))))]",
             "plainEnv": [
               {
                 "name": "PHX_HOST",
@@ -1344,6 +1365,10 @@
               {
                 "name": "EDSPACE_LLM_API_KEY",
                 "secretRef": "llm-api-key"
+              },
+              {
+                "name": "EDSPACE_SETUP_TOKEN",
+                "secretRef": "setup-token"
               }
             ],
             "conditionalEnv": "[concat(if(empty(parameters('llmApiVersion')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_API_VERSION', 'value', parameters('llmApiVersion')))), if(empty(parameters('llmTextModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_TEXT_MODEL', 'value', parameters('llmTextModel')))), if(empty(parameters('llmSmallModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_SMALL_MODEL', 'value', parameters('llmSmallModel')))), if(empty(parameters('llmEmbeddingModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_EMBEDDING_MODEL', 'value', parameters('llmEmbeddingModel')))), if(empty(parameters('speechRegion')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_REGION', 'value', parameters('speechRegion')))), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_KEY', 'secretRef', 'azure-speech-key'))), if(empty(parameters('mailFromName')), createArray(), createArray(createObject('name', 'MAILER_FROM_NAME', 'value', parameters('mailFromName')))), if(equals(parameters('mailerAdapter'), 'none'), createArray(), createArray(createObject('name', 'MAILER_FROM_EMAIL', 'value', parameters('mailFromEmail')))), if(equals(parameters('mailerAdapter'), 'mailpace'), createArray(createObject('name', 'MAILPACE_API_KEY', 'secretRef', 'mailpace-api-key')), createArray()), if(equals(parameters('mailerAdapter'), 'smtp'), createArray(createObject('name', 'MAILER_SMTP_RELAY', 'value', parameters('mailSmtpRelay')), createObject('name', 'MAILER_SMTP_PORT', 'value', string(parameters('mailSmtpPort'))), createObject('name', 'MAILER_SMTP_SSL', 'value', if(parameters('mailSmtpSsl'), 'true', 'false'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createArray(createObject('name', 'MAILER_SMTP_USERNAME', 'value', parameters('mailSmtpUsername'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createArray(createObject('name', 'MAILER_SMTP_PASSWORD', 'secretRef', 'smtp-password')), createArray()), if(parameters('enableMicrosoftSso'), createArray(createObject('name', 'MICROSOFT_TENANT_ID', 'value', parameters('microsoftTenantId')), createObject('name', 'MICROSOFT_CLIENT_ID', 'value', parameters('microsoftClientId')), createObject('name', 'MICROSOFT_REDIRECT_URI', 'value', format('https://{0}/auth/microsoft/callback', parameters('phxHost'))), createObject('name', 'MICROSOFT_CLIENT_SECRET', 'secretRef', 'microsoft-client-secret')), createArray()))]"
@@ -1486,6 +1511,10 @@
     "microsoftRedirectUri": {
       "type": "string",
       "value": "[format('https://{0}/auth/microsoft/callback', if(empty(parameters('customDomain')), format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain), parameters('customDomain')))]"
+    },
+    "setupUrl": {
+      "type": "string",
+      "value": "[format('https://{0}/setup?token={1}', if(empty(parameters('customDomain')), format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain), parameters('customDomain')), variables('setupToken'))]"
     }
   }
 }

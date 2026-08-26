@@ -12,6 +12,21 @@ EdSpace {{ .Chart.AppVersion }} deployed as release {{ .Release.Name }}.
 Watch the rollout:
   kubectl -n {{ .Release.Namespace }} rollout status deploy/{{ include "edspace.fullname" . }}
 
+{{- if or .Values.secrets.setupToken (and .Values.secrets.autoGenerate (not .Values.secrets.existingSecret)) }}
+
+First-run setup (fresh database only) — create the first platform admin at:
+  https://{{ .Values.ingress.host | default .Values.app.host }}/setup?token=$(kubectl -n {{ .Release.Namespace }} get secret {{ include "edspace.fullname" . }}-generated -o jsonpath='{.data.setup-token}' | base64 -d)
+  The link is valid for 7 days from the token's issue time and stops working
+  once a platform admin exists. Expired? Mint a new one:
+    helm upgrade {{ .Release.Name }} <chart> --reuse-values \
+      --set secrets.setupToken="$(date -u +%Y%m%d%H%M%S).$(openssl rand -hex 16)"
+{{- else }}
+
+First-run setup (fresh database only): set EDSPACE_SETUP_TOKEN via envSecret
+and open https://{{ .Values.ingress.host | default .Values.app.host }}/setup?token=<value>,
+or seed the admin with EDSPACE_PLATFORM_ADMINS (see docs/configuration.md).
+{{- end }}
+
 {{- if and .Values.secrets.autoGenerate (not .Values.secrets.existingSecret) }}
 
 WARNING - generated secrets are in use.

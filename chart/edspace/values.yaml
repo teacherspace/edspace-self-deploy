@@ -85,6 +85,11 @@ secrets:
   tokenSigningSecret: ""
   # -- Erlang distribution cookie; only used when clustering.enabled.
   releaseCookie: ""
+  # -- First-run setup token (EDSPACE_SETUP_TOKEN), `<yyyyMMddHHmmss>.<random>`.
+  # Generated on first install when autoGenerate is on; the install notes print
+  # the /setup link. Set explicitly to mint a fresh one (valid 7 days from the
+  # embedded time, ignored once a platform admin exists).
+  setupToken: ""
   # -- Existing Secret holding the three keys below.
   existingSecret: ""
   existingSecretKeys:

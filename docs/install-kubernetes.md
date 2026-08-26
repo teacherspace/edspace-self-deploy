@@ -63,6 +63,8 @@ helm test edspace -n edspace
 
 `SECRET_KEY_BASE`, `TOKEN_SIGNING_SECRET` and the Erlang release cookie are auto-generated on first install and kept in the `<release>-generated` Secret (it survives uninstall). The install notes (`helm status edspace`) show how to retrieve them.
 
+The install notes also print the **first-run setup link** (`/setup?token=…`, token from the same Secret): open it to create the first platform admin from the browser. It is valid for seven days and stops working once an admin exists — `secrets.setupToken` mints a fresh one.
+
 ## Production checklist
 
 - **Explicit secrets** — set `secrets.autoGenerate=false` and provide `secrets.*` or `secrets.existingSecret`. Auto-generation uses Helm `lookup`, which does not work under GitOps renderers (ArgoCD/Flux) and regenerates on every render there.
