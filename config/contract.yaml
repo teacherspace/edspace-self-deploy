@@ -65,8 +65,10 @@ categories:
 
 requirement_contexts:
   first_admin_bootstrap: >-
-    A fresh database has no platform admin yet, so an operator must seed the
-    first one out of band before the backoffice is reachable.
+    A fresh database has no platform admin yet. The /setup page
+    (EDSPACE_SETUP_TOKEN) creates the first one from the browser; without it,
+    an operator must seed the first admin out of band before the backoffice is
+    reachable.
 
 # Variables the application reads that are deliberately OUTSIDE the customer
 # contract, each with the reason. `scripts/check-contract-parity.py` reads this
@@ -1036,12 +1038,30 @@ vars:
     tier: advanced
     source: user
 
+  - name: EDSPACE_SETUP_TOKEN
+    category: auth
+    description: >-
+      First-run setup token. While it is set and no platform admin exists yet,
+      the app serves `/setup?token=<value>`: a page that creates the first
+      platform admin (email + password) and signs them in. The token is
+      `<yyyyMMddHHmmss>.<random>` — the timestamp is its issue time, after
+      which it is honoured for 7 days — and is ignored once any platform admin
+      exists, so it can stay in the environment. The Azure template generates
+      it and prints the link as the `setupUrl` deployment output; Helm and
+      Compose installs set it themselves (`date -u +%Y%m%d%H%M%S`.`openssl
+      rand -hex 16`). The CLI alternative is `EDSPACE_PLATFORM_ADMINS`.
+    type: string
+    required: false
+    secret: true
+    tier: core
+    source: user
+
   - name: EDSPACE_PLATFORM_ADMINS
     category: auth
     description: >-
-      Comma-separated emails granted platform-admin on reconciliation. This is
-      the first-admin bootstrap: a fresh install has no account that can reach
-      the backoffice, so set this and then run
+      Comma-separated emails granted platform-admin on reconciliation. CLI
+      alternative to the `/setup` page (`EDSPACE_SETUP_TOKEN`) for seeding the
+      first admin: set this and then run
       `bin/edspace rpc 'Edspace.Accounts.AdminReconciler.bootstrap() |>
       IO.inspect(pretty: true)'` inside the app container. With email disabled,
       the result contains onboarding links to hand over securely. Additive only
@@ -1049,10 +1069,10 @@ vars:
     type: string
     required: false
     required_when:
-      description: bootstrapping the first platform admin on a fresh install
+      description: bootstrapping the first platform admin on a fresh install without the /setup page
       condition: { context: first_admin_bootstrap }
     secret: false
-    tier: core
+    tier: advanced
     source: user
     example: admin@school.example,head@school.example
 

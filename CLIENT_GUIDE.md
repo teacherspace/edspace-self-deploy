@@ -279,7 +279,9 @@ The `ALICE_*` connection settings are provided by EdSpace during onboarding for 
 
 Schools, users, and invitations are managed in the **backoffice UI** by platform admins: create schools, create users directly (for SSO-backed accounts — no email is sent; the user simply signs in), or **invite** users by email (magic-link based).
 
-**First admin bootstrap** — on a fresh install no admin exists yet, so no one can log into the backoffice. Set `EDSPACE_PLATFORM_ADMINS` to a comma-separated list of admin emails in the deployment environment, then run inside the app container:
+**First admin — setup page** — on a fresh install no admin exists yet, so no one can log into the backoffice. Every packaging provides a one-time link `https://<PHX_HOST>/setup?token=<EDSPACE_SETUP_TOKEN>` (Azure: the `setupUrl` deployment output; Helm: printed by `helm install` / `helm status`; Compose: the `EDSPACE_SETUP_TOKEN` line that `scripts/generate-secrets.sh` writes to `.env`). The page asks for the admin's email and a password, creates the account as platform admin and signs it in. The token embeds its issue time and is refused after seven days, and the page disappears entirely once any platform admin exists — so the token may stay in the environment. To mint a fresh one, set `EDSPACE_SETUP_TOKEN` to `$(date -u +%Y%m%d%H%M%S).$(openssl rand -hex 16)` and restart.
+
+**First admin — CLI fallback** — set `EDSPACE_PLATFORM_ADMINS` to a comma-separated list of admin emails in the deployment environment, then run inside the app container:
 
 ```sh
 bin/edspace rpc 'Edspace.Accounts.AdminReconciler.bootstrap() |> IO.inspect(pretty: true)'

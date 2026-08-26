@@ -56,7 +56,7 @@
       }
     },
     "EDSPACE_PLATFORM_ADMINS": {
-      "description": "bootstrapping the first platform admin on a fresh install",
+      "description": "bootstrapping the first platform admin on a fresh install without the /setup page",
       "condition": {
         "context": "first_admin_bootstrap"
       }

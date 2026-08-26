@@ -154,6 +154,25 @@ no existingSecret) they flow through the chart Secret via envFrom instead.
 {{- end }}
 {{- end }}
 
+{{/*
+EDSPACE_SETUP_TOKEN — the first-run /setup page. Generated with the other
+secrets, or given explicitly; with existingSecret, customers add it through
+envSecret themselves (or bootstrap via EDSPACE_PLATFORM_ADMINS).
+*/}}
+{{- define "edspace.setupTokenEnv" -}}
+{{- $s := .Values.secrets }}
+{{- if $s.setupToken }}
+- name: EDSPACE_SETUP_TOKEN
+  value: {{ $s.setupToken | quote }}
+{{- else if and $s.autoGenerate (not $s.existingSecret) }}
+- name: EDSPACE_SETUP_TOKEN
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "edspace.fullname" . }}-generated
+      key: setup-token
+{{- end }}
+{{- end }}
+
 {{/* RELEASE_COOKIE env entry (clustering only) */}}
 {{- define "edspace.releaseCookieEnv" -}}
 {{- $s := .Values.secrets }}
