@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "14193608521903306152"
+      "templateHash": "16407166434551395393"
     }
   },
   "parameters": {
@@ -118,7 +118,7 @@
         "DataZoneStandard"
       ],
       "metadata": {
-        "description": "Deployment type for the model deployments. GlobalStandard has the widest model/region coverage; DataZoneStandard keeps inference inside the EU/US data zone of aiLocation. Quota is per model AND per deployment type — if a deploy reports a quota limit of 0, try the other type or request quota for the exact model/type pair named in the error. Mistral-Large-3 is always GlobalStandard."
+        "description": "Deployment type for the model deployments. GlobalStandard has the widest model/region coverage; DataZoneStandard keeps inference inside the EU/US data zone of aiLocation. Quota is per model AND per deployment type — if a deploy reports a quota limit of 0, try the other type or request quota for the exact model/type pair named in the error."
       }
     },
     "deployedModels": {
@@ -477,7 +477,7 @@
         "deployment": "Mistral-Large-3",
         "modelId": "azure:mistral-large-3",
         "capacity": "[parameters('textModelCapacity')]",
-        "sku": "GlobalStandard",
+        "sku": "[parameters('modelSku')]",
         "model": {
           "format": "Mistral AI",
           "name": "Mistral-Large-3",

@@ -112,7 +112,7 @@
             "label": "Model deployment type",
             "visible": "[steps('ai').enableAzureAi]",
             "defaultValue": "Global Standard (widest availability)",
-            "toolTip": "Quota is granted per model AND per deployment type, so this is the first thing to change if the deployment fails with a quota limit of 0. Global Standard has the widest model and region coverage. Data Zone Standard keeps inference inside the data zone of the AI region above (EU for Sweden Central and West Europe, US for East US) and is what EdSpace runs internally; Mistral-Large-3 is Global Standard either way, as data zone deployment types apply to the OpenAI models only.",
+            "toolTip": "Quota is granted per model AND per deployment type, so this is the first thing to change if the deployment fails with a quota limit of 0. Global Standard has the widest model and region coverage. Data Zone Standard keeps inference inside the data zone of the AI region above (EU for Sweden Central and West Europe, US for East US) and is what EdSpace runs internally.",
             "constraints": {
               "allowedValues": [
                 { "label": "Global Standard (widest availability)", "value": "GlobalStandard" },
@@ -530,7 +530,7 @@
       "enableAzureAi": "[steps('ai').enableAzureAi]",
       "aiLocation": "[if(steps('ai').enableAzureAi, steps('ai').aiLocation, 'swedencentral')]",
       "modelSku": "[if(steps('ai').enableAzureAi, steps('ai').modelSku, 'GlobalStandard')]",
-      "deployedModels": "[if(steps('ai').enableAzureAi, steps('ai').deployedModels, json('[]'))]",
+      "deployedModels": "[if(steps('ai').enableAzureAi, steps('ai').deployedModels, parse('[]'))]",
       "defaultTextModel": "[if(steps('ai').enableAzureAi, steps('ai').defaultTextModel, 'gpt-5.6-sol')]",
       "defaultSmallModel": "[if(steps('ai').enableAzureAi, steps('ai').defaultSmallModel, 'gpt-5.6-luna')]",
       "textModelCapacity": "[if(steps('ai').enableAzureAi, int(steps('ai').textModelCapacity), 50)]",

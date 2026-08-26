@@ -249,10 +249,9 @@ Don't.
   for that exact model/type pair.
   `modelSku` exposes that choice at install (`GlobalStandard` default,
   `DataZoneStandard` for EU/US data-zone residency and for parity with
-  `infrastructure/iac-ai-foundry`). It applies to the seven OpenAI-format
-  entries; `Mistral-Large-3` is pinned to `GlobalStandard`, as data-zone
-  deployment types are an Azure OpenAI concept — so a DataZoneStandard install
-  still serves Mistral globally, which the UI tooltip states.
+  `infrastructure/iac-ai-foundry`). It applies to all 8 entries, `Mistral-Large-3`
+  included — the catalog lists both types for it and internal prod deploys it as
+  DataZoneStandard.
   All 8 have a GlobalStandard bucket in `swedencentral`, verified live on
   2026-08-20 against both EdSpace subscriptions with
   `az cognitiveservices usage list -l swedencentral`. Note `Mistral-Large-3`

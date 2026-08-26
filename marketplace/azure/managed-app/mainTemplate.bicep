@@ -83,7 +83,7 @@ param aiLocation string = 'swedencentral'
 // DataZoneStandard additionally keeps inference inside the data zone of aiLocation
 // (EU for swedencentral/westeurope), which is what EdSpace runs internally.
 @allowed(['GlobalStandard', 'DataZoneStandard'])
-@description('Deployment type for the model deployments. GlobalStandard has the widest model/region coverage; DataZoneStandard keeps inference inside the EU/US data zone of aiLocation. Quota is per model AND per deployment type — if a deploy reports a quota limit of 0, try the other type or request quota for the exact model/type pair named in the error. Mistral-Large-3 is always GlobalStandard.')
+@description('Deployment type for the model deployments. GlobalStandard has the widest model/region coverage; DataZoneStandard keeps inference inside the EU/US data zone of aiLocation. Quota is per model AND per deployment type — if a deploy reports a quota limit of 0, try the other type or request quota for the exact model/type pair named in the error.')
 param modelSku string = 'GlobalStandard'
 
 // Which of the catalog's chat/small models actually get deployed. The full set is
@@ -392,9 +392,10 @@ resource aiAccount 'Microsoft.CognitiveServices/accounts@2025-09-01' = if (enabl
 // what infrastructure/iac-ai-foundry uses internally (EU data zone) and is the
 // pick for a customer who needs data-zone residency or whose subscription only
 // holds quota there. It stays per-entry because availability is per-model and
-// per-region: the non-OpenAI Mistral entry is pinned to GlobalStandard below,
-// and any other model that turns out not to offer the selected type is a
-// one-line change to its entry.
+// per-region: a model that turns out not to offer the selected type in some
+// region is a one-line change to its entry. All 8 (Mistral-Large-3 included)
+// list both GlobalStandard and DataZoneStandard in the swedencentral catalog,
+// verified 2026-08-26 with `az cognitiveservices model list -l swedencentral`.
 var modelCatalog = [
   {
     deployment: 'gpt-5.1'
@@ -449,16 +450,12 @@ var modelCatalog = [
     // Marketplace subscription. Note the non-OpenAI format string and the
     // case-sensitive deployment name: the app's registry routes
     // `azure:mistral-large-3` to deployment `Mistral-Large-3`, and Azure
-    // deployment names are case-sensitive.
-    //
-    // Pinned to GlobalStandard rather than following `modelSku`: data-zone
-    // deployment types are an Azure OpenAI concept and this is the one entry
-    // that is not an OpenAI-format model. A DataZoneStandard install therefore
-    // serves Mistral globally — surfaced in the install UI and the README.
+    // deployment names are case-sensitive. Follows `modelSku` like the rest:
+    // the model offers DataZoneStandard too (internal prod runs it that way).
     deployment: 'Mistral-Large-3'
     modelId: 'azure:mistral-large-3'
     capacity: textModelCapacity
-    sku: 'GlobalStandard'
+    sku: modelSku
     model: { format: 'Mistral AI', name: 'Mistral-Large-3', version: '1' }
   }
   {
