@@ -351,6 +351,13 @@ resource storage 'Microsoft.Storage/storageAccounts@2025-01-01' = {
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2025-01-01' = {
   parent: storage
   name: 'default'
+  properties: {
+    isVersioningEnabled: false
+    deleteRetentionPolicy: { enabled: false }
+    containerDeleteRetentionPolicy: { enabled: false }
+    restorePolicy: { enabled: false }
+    changeFeed: { enabled: false }
+  }
 }
 
 resource uploadsContainer 'Microsoft.Storage/storageAccounts/blobServices/containers@2025-01-01' = {
