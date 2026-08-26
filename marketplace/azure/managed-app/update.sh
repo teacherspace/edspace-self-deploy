@@ -31,7 +31,7 @@ for attempt in $(seq 1 60); do
   echo "revision $LATEST: $STATE"
   case "$STATE" in
     *Running*Healthy*) break ;;
-    *Failed*|*ActivationFailed*|*Degraded*)
+    *Failed*|*Degraded*)
       echo "revision $LATEST did not become healthy; the previous revision keeps serving." >&2
       az containerapp revision show -n "$APP" -g "$RG" --revision "$LATEST" \
         --query 'properties.runningStateDetails' -o tsv >&2 || true

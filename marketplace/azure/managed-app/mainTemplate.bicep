@@ -258,6 +258,23 @@ param tokenSigningSeed string = newGuid()
 @description('Entropy seed for the generated PostgreSQL admin password. Leave at the default; only read when bootstrapSecrets is true.')
 param pgPasswordSeed string = newGuid()
 
+// ---------------------------------------------------------- first-run setup
+// The app serves /setup — a page that creates the first platform admin —
+// only while no platform admin exists AND the request carries this token.
+// It is deliberately NOT @secure() and IS emitted as an output (setupUrl):
+// the whole point is that the person who ran the deployment finds the link
+// on the Outputs tab, without a CLI. Exposure is bounded on both ends: the
+// app refuses the token 7 days after the issue time embedded in it, and
+// ignores it altogether once an admin exists. Both parts re-evaluate on
+// every deployment; a redeploy after setup rotates a token nobody can use.
+@description('Issue time of the first-run setup token. Leave at the default.')
+param setupTokenIssuedAt string = utcNow('yyyyMMddHHmmss')
+
+@description('Entropy for the first-run setup token. Leave at the default.')
+param setupTokenSeed string = newGuid()
+
+var setupToken = '${setupTokenIssuedAt}.${replace(setupTokenSeed, '-', '')}'
+
 // ------------------------------------------------------------------- naming
 var suffix = uniqueString(resourceGroup().id) // stable per instance -> idempotent re-deploys
 // Exact, publisher-owned discovery marker. Customer-supplied tags are retained.
@@ -711,6 +728,7 @@ module app 'modules/containerApp.bicep' = {
     appSize: appSize
     phxHost: phxHost
     checkOrigin: checkOrigin
+    setupToken: setupToken
 
     keyVaultUri: keyVault.properties.vaultUri
     identityId: appIdentity.id
@@ -797,3 +815,7 @@ output aiAccountName string = enableAzureAi ? aiAccountName : ''
 // register; MICROSOFT_REDIRECT_URI in the app is set from the same host, so
 // the two can never disagree (with a custom domain this is the custom host).
 output microsoftRedirectUri string = 'https://${phxHost}/auth/microsoft/callback'
+// First-run setup link: open it, create the first platform admin, sign in.
+// Valid for 7 days from deployment and void once an admin exists (see the
+// setupToken comment above for why a token is allowed in an output here).
+output setupUrl string = 'https://${phxHost}/setup?token=${setupToken}'

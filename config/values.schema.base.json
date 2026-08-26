@@ -94,6 +94,7 @@
         "secretKeyBase": { "type": "string" },
         "tokenSigningSecret": { "type": "string" },
         "releaseCookie": { "type": "string" },
+        "setupToken": { "type": "string", "pattern": "^$|^[0-9]{14}\\.[A-Za-z0-9]+$" },
         "existingSecret": { "type": "string" },
         "existingSecretKeys": {
           "type": "object",

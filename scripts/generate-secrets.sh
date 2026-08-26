@@ -13,3 +13,5 @@ printf 'TOKEN_SIGNING_SECRET=%s\n' "$(openssl rand -base64 48 | tr -d '\n=')"
 printf 'POSTGRES_PASSWORD=%s\n' "$(openssl rand -hex 16)"
 # Only needed for multi-node Kubernetes deployments (secrets.releaseCookie):
 printf '# RELEASE_COOKIE=%s\n' "$(openssl rand -base64 32 | tr -d '\n=+/')"
+# First-run setup: open https://<PHX_HOST>/setup?token=<value> to create the first admin (valid 7 days)
+printf 'EDSPACE_SETUP_TOKEN=%s\n' "$(date -u +%Y%m%d%H%M%S).$(openssl rand -hex 16)"

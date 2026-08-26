@@ -25,6 +25,10 @@ param phxHost string
 // Comma-separated allowed WebSocket origins (PHX_CHECK_ORIGIN). Computed in
 // mainTemplate: the custom domain plus the generated address during cutover.
 param checkOrigin string
+// First-run setup token (EDSPACE_SETUP_TOKEN); see mainTemplate. Bound as an
+// ACA secret so it does not show in the plain env listing, although the
+// token is short-lived by design.
+param setupToken string
 
 // --- key vault ---
 @description('Vault URI (with trailing slash) holding every instance secret bound below.')
@@ -127,6 +131,7 @@ var vaultSecrets = [
 var secrets = concat(
   vaultSecrets,
   [{ name: 'azure-storage-key', value: storageAccountKey }],
+  [{ name: 'setup-token', value: setupToken }],
   useAiAccountKey ? [{ name: 'llm-api-key', value: llmApiKeyFromAi }] : [],
   empty(speechKey) ? [] : [{ name: 'azure-speech-key', value: speechKey }]
 )
@@ -155,6 +160,7 @@ var secretEnv = [
   { name: 'DATABASE_URL', secretRef: 'database-url' }
   { name: 'AZURE_STORAGE_KEY', secretRef: 'azure-storage-key' }
   { name: 'EDSPACE_LLM_API_KEY', secretRef: 'llm-api-key' }
+  { name: 'EDSPACE_SETUP_TOKEN', secretRef: 'setup-token' }
 ]
 
 var conditionalEnv = concat(

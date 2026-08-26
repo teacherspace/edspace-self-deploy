@@ -140,7 +140,7 @@ ARM-TTK (the test suite marketplace certification runs) is enforced in CI on
 every change, against both the built template and `createUiDefinition.json` —
 one test is skipped there ("URIs Should Be Properly Constructed", a false
 positive on the composed `appUrl`/`DATABASE_URL` values). Run it locally with
-`Test-AzTemplate -TemplatePath ./dist`.
+`Test-AzTemplate -TemplatePath ./dist` (and `./dist-update` for the update template).
 
 Also run before submission:
 the [createUiDefinition sandbox](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade),
@@ -213,6 +213,16 @@ generated secret** (all sessions/tokens invalidated, DB password changed).
 Don't.
 
 ## Design notes
+
+- **The one output that carries a credential, on purpose.** `setupUrl` embeds
+  `EDSPACE_SETUP_TOKEN`, the first-run setup token. Deployment outputs land in
+  deployment history, readable by anyone with read on the resource group — the
+  same audience that can read the app's env. That is acceptable here and for
+  nothing else: the app refuses the token 7 days after the issue time embedded
+  in it and ignores it altogether once a platform admin exists, so the output
+  is worthless to anyone who was not first through the door. It is what turns
+  "bootstrap the admin over `az containerapp exec`" into "click the link on the
+  Outputs tab". Every other secret stays out of outputs.
 
 - `mainTemplate.bicep` is fully self-contained (marketplace requirement — no
   registry module references). Two local modules exist so that secret values

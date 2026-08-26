@@ -14,7 +14,7 @@ For pilots, evaluations and small single-host installs. Postgres (with pgvector)
 docker login edspace.azurecr.io -u <user> -p <token>
 cd compose
 cp .env.example .env
-../scripts/generate-secrets.sh >> .env   # SECRET_KEY_BASE, TOKEN_SIGNING_SECRET, POSTGRES_PASSWORD
+../scripts/generate-secrets.sh >> .env   # SECRET_KEY_BASE, TOKEN_SIGNING_SECRET, POSTGRES_PASSWORD, EDSPACE_SETUP_TOKEN
 $EDITOR .env                             # PHX_HOST, EDSPACE_LLM_*, MAILER_* , EDSPACE_IMAGE_TAG
 docker compose up -d
 ```
@@ -36,6 +36,14 @@ The app runs database migrations automatically on start, then listens on port `4
 curl -fsS http://localhost:4000/health    # -> ok
 curl -fsS http://localhost:4000/version   # -> build sha
 ```
+
+Then create the first platform admin: open
+`https://<PHX_HOST>/setup?token=<EDSPACE_SETUP_TOKEN from .env>` (via your
+proxy — or `http://localhost:4000/setup?token=…` before it is public), enter the
+admin's email and a password, and you are signed in. The link is valid for
+seven days from the token's issue time and disappears once an admin exists; a
+fresh one is `$(date -u +%Y%m%d%H%M%S).$(openssl rand -hex 16)` in `.env`
+followed by `docker compose up -d`.
 
 ## TLS / public exposure
 
