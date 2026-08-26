@@ -450,36 +450,36 @@ resource pgAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = 
 }
 
 // Both mailer credentials are always created, with a placeholder when the
-// selected adapter does not use them: getSecret() cannot sit behind a
-// conditional at the module call site, and Key Vault rejects an empty value.
+// selected adapter does not use them (Key Vault rejects an empty value). The
+// container-app module only reads the one its adapter uses, but keeping every
+// secret present means a later bootstrapSecrets=false redeploy that switches
+// adapter or enables SSO finds its secret already in the vault.
+// Instances installed before smtp-password / microsoft-client-secret existed
+// must seed them by hand before such a redeploy — see README "Secret model".
 resource mailpaceApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'mailpace-api-key'
-  // Placeholder ONLY when another adapter is selected. Under 'mailpace' the
-  // real key goes in unmodified, so a CLI deployment that forgot it hits Key
-  // Vault's empty-value rejection and fails here — instead of installing an
-  // app that boots green and then has every message refused by MailPace.
-  properties: { value: mailerAdapter == 'mailpace' ? mailpaceApiKey : 'unused-mailer-adapter-${mailerAdapter}' }
+  // Placeholder ONLY when another adapter is selected; under 'mailpace' the
+  // real key goes in unmodified. The *Checked variable carries the guard that
+  // rejects an empty key outright, so this never writes a blank credential.
+  properties: { value: mailerAdapter == 'mailpace' ? mailpaceApiKeyChecked : 'unused-mailer-adapter-${mailerAdapter}' }
 }
 
-// An SMTP relay on a trusted network may take no credentials at all. Once a
-// username is supplied, however, the real password is written unmodified: an
-// empty value makes Key Vault reject the deployment before a credentialless
-// app revision can be created.
+// An SMTP relay on a trusted network may take no credentials at all, so the
+// placeholder also stands in for "no authentication". Reading the *Checked
+// variable here is what makes the username/password pairing guard reachable.
 resource smtpPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'smtp-password'
-  properties: { value: mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? mailSmtpPassword : 'unused-mailer-adapter-${mailerAdapter}' }
+  properties: { value: mailerAdapter == 'smtp' && !empty(mailSmtpUsernameChecked) ? mailSmtpPassword : 'unused-mailer-adapter-${mailerAdapter}' }
 }
 
 // Same always-created / placeholder-when-disabled pattern as the mailer
-// credentials. Under enableMicrosoftSso the raw value goes in, so a CLI
-// deployment that enabled SSO but forgot the secret fails here on Key Vault's
-// empty-value rejection instead of installing a sign-in button that 400s.
+// credentials.
 resource microsoftClientSecretSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'microsoft-client-secret'
-  properties: { value: enableMicrosoftSso ? microsoftClientSecret : 'unused-microsoft-sso-disabled' }
+  properties: { value: enableMicrosoftSso ? microsoftClientSecretChecked : 'unused-microsoft-sso-disabled' }
 }
 
 resource registryPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
@@ -527,6 +527,48 @@ var phxHost = empty(customDomain) ? generatedHost : customDomain
 var checkOrigin = empty(customDomain)
   ? 'https://${generatedHost}'
   : 'https://${customDomain},https://${generatedHost}'
+
+// The portal form enforces these per adapter (createUiDefinition), but a CLI
+// or parameters-file deployment can omit them and would otherwise install an
+// app that fails its boot check on an empty MAILER_FROM_EMAIL / relay. ARM's
+// if() is lazy, so fail() only evaluates when the condition holds.
+//
+// A credential that is written into Key Vault gets its check gated on
+// bootstrapSecrets: under bootstrapSecrets=false the vault already holds the
+// value and the matching parameter is expected to arrive empty.
+var mailFromEmailChecked = mailerAdapter != 'none' && empty(mailFromEmail)
+  ? fail('mailFromEmail is required unless mailerAdapter is "none".')
+  : mailFromEmail
+var mailSmtpRelayChecked = mailerAdapter == 'smtp' && empty(mailSmtpRelay)
+  ? fail('mailSmtpRelay is required when mailerAdapter is "smtp".')
+  : mailSmtpRelay
+// A password without a username would be silently dropped (the vault gets the
+// placeholder and no MAILER_SMTP_PASSWORD is emitted), so reject the pair.
+// The other order is just as broken: the app authenticates as soon as a
+// username is set, so a username with no password writes an empty Key Vault
+// value and the deployment dies on an opaque BadRequest after the vault,
+// database and environment already exist.
+var mailSmtpUsernameChecked = mailerAdapter == 'smtp' && empty(mailSmtpUsername) && !empty(mailSmtpPassword)
+  ? fail('mailSmtpPassword was supplied without mailSmtpUsername; set both, or neither for an unauthenticated relay.')
+  : mailerAdapter == 'smtp' && bootstrapSecrets && !empty(mailSmtpUsername) && empty(mailSmtpPassword)
+      ? fail('mailSmtpUsername was supplied without mailSmtpPassword; set both, or neither for an unauthenticated relay.')
+      : mailSmtpUsername
+// The remaining credentials used to rely on Key Vault rejecting an empty
+// secret value. That does stop the install, but only on the bootstrap path
+// and only with an ARM BadRequest that names neither the parameter nor the
+// feature; these say which one is missing, before anything is created.
+var mailpaceApiKeyChecked = mailerAdapter == 'mailpace' && bootstrapSecrets && empty(mailpaceApiKey)
+  ? fail('mailpaceApiKey is required when mailerAdapter is "mailpace".')
+  : mailpaceApiKey
+// Not a secret, and so not covered by the Key Vault backstop at all: an empty
+// client ID reads as "provider off" to the app (see containerApp.bicep), which
+// would hand back a successful deployment with the sign-in button missing.
+var microsoftClientIdChecked = enableMicrosoftSso && empty(microsoftClientId)
+  ? fail('microsoftClientId is required when enableMicrosoftSso is true.')
+  : microsoftClientId
+var microsoftClientSecretChecked = enableMicrosoftSso && bootstrapSecrets && empty(microsoftClientSecret)
+  ? fail('microsoftClientSecret is required when enableMicrosoftSso is true.')
+  : microsoftClientSecret
 
 module app 'modules/containerApp.bicep' = {
   name: 'edspace-app'
@@ -587,18 +629,18 @@ module app 'modules/containerApp.bicep' = {
     speechRegion: enableAzureAi && enableSpeech ? aiLocation : ''
 
     mailerAdapter: mailerAdapter
-    mailFromEmail: mailFromEmail
+    mailFromEmail: mailFromEmailChecked
     mailFromName: mailFromName
-    mailSmtpRelay: mailSmtpRelay
+    mailSmtpRelay: mailSmtpRelayChecked
     mailSmtpPort: mailSmtpPort
     mailSmtpSsl: mailSmtpSsl
-    mailSmtpUsername: mailSmtpUsername
+    mailSmtpUsername: mailSmtpUsernameChecked
 
     enableMicrosoftSso: enableMicrosoftSso
     // The app itself defaults to "common"; an explicit fallback here keeps the
     // CLI path from emitting an empty MICROSOFT_TENANT_ID.
     microsoftTenantId: empty(microsoftTenantId) ? 'common' : microsoftTenantId
-    microsoftClientId: microsoftClientId
+    microsoftClientId: microsoftClientIdChecked
   }
   dependsOn: [
     secretKeyBaseSecret

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "18209998362260074049"
+      "templateHash": "15659086837996228841"
     }
   },
   "parameters": {
@@ -425,7 +425,13 @@
           "version": "1"
         }
       }
-    ]
+    ],
+    "mailFromEmailChecked": "[if(and(not(equals(parameters('mailerAdapter'), 'none')), empty(parameters('mailFromEmail'))), fail('mailFromEmail is required unless mailerAdapter is \"none\".'), parameters('mailFromEmail'))]",
+    "mailSmtpRelayChecked": "[if(and(equals(parameters('mailerAdapter'), 'smtp'), empty(parameters('mailSmtpRelay'))), fail('mailSmtpRelay is required when mailerAdapter is \"smtp\".'), parameters('mailSmtpRelay'))]",
+    "mailSmtpUsernameChecked": "[if(and(and(equals(parameters('mailerAdapter'), 'smtp'), empty(parameters('mailSmtpUsername'))), not(empty(parameters('mailSmtpPassword')))), fail('mailSmtpPassword was supplied without mailSmtpUsername; set both, or neither for an unauthenticated relay.'), if(and(and(and(equals(parameters('mailerAdapter'), 'smtp'), parameters('bootstrapSecrets')), not(empty(parameters('mailSmtpUsername')))), empty(parameters('mailSmtpPassword'))), fail('mailSmtpUsername was supplied without mailSmtpPassword; set both, or neither for an unauthenticated relay.'), parameters('mailSmtpUsername')))]",
+    "mailpaceApiKeyChecked": "[if(and(and(equals(parameters('mailerAdapter'), 'mailpace'), parameters('bootstrapSecrets')), empty(parameters('mailpaceApiKey'))), fail('mailpaceApiKey is required when mailerAdapter is \"mailpace\".'), parameters('mailpaceApiKey'))]",
+    "microsoftClientIdChecked": "[if(and(parameters('enableMicrosoftSso'), empty(parameters('microsoftClientId'))), fail('microsoftClientId is required when enableMicrosoftSso is true.'), parameters('microsoftClientId'))]",
+    "microsoftClientSecretChecked": "[if(and(and(parameters('enableMicrosoftSso'), parameters('bootstrapSecrets')), empty(parameters('microsoftClientSecret'))), fail('microsoftClientSecret is required when enableMicrosoftSso is true.'), parameters('microsoftClientSecret'))]"
   },
   "resources": [
     {
@@ -618,7 +624,7 @@
       "apiVersion": "2025-05-01",
       "name": "[format('{0}/{1}', variables('keyVaultName'), 'mailpace-api-key')]",
       "properties": {
-        "value": "[if(equals(parameters('mailerAdapter'), 'mailpace'), parameters('mailpaceApiKey'), format('unused-mailer-adapter-{0}', parameters('mailerAdapter')))]"
+        "value": "[if(equals(parameters('mailerAdapter'), 'mailpace'), variables('mailpaceApiKeyChecked'), format('unused-mailer-adapter-{0}', parameters('mailerAdapter')))]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
@@ -630,7 +636,7 @@
       "apiVersion": "2025-05-01",
       "name": "[format('{0}/{1}', variables('keyVaultName'), 'smtp-password')]",
       "properties": {
-        "value": "[if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), parameters('mailSmtpPassword'), format('unused-mailer-adapter-{0}', parameters('mailerAdapter')))]"
+        "value": "[if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(variables('mailSmtpUsernameChecked')))), parameters('mailSmtpPassword'), format('unused-mailer-adapter-{0}', parameters('mailerAdapter')))]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
@@ -642,7 +648,7 @@
       "apiVersion": "2025-05-01",
       "name": "[format('{0}/{1}', variables('keyVaultName'), 'microsoft-client-secret')]",
       "properties": {
-        "value": "[if(parameters('enableMicrosoftSso'), parameters('microsoftClientSecret'), 'unused-microsoft-sso-disabled')]"
+        "value": "[if(parameters('enableMicrosoftSso'), variables('microsoftClientSecretChecked'), 'unused-microsoft-sso-disabled')]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
@@ -986,13 +992,13 @@
             "value": "[parameters('mailerAdapter')]"
           },
           "mailFromEmail": {
-            "value": "[parameters('mailFromEmail')]"
+            "value": "[variables('mailFromEmailChecked')]"
           },
           "mailFromName": {
             "value": "[parameters('mailFromName')]"
           },
           "mailSmtpRelay": {
-            "value": "[parameters('mailSmtpRelay')]"
+            "value": "[variables('mailSmtpRelayChecked')]"
           },
           "mailSmtpPort": {
             "value": "[parameters('mailSmtpPort')]"
@@ -1001,14 +1007,14 @@
             "value": "[parameters('mailSmtpSsl')]"
           },
           "mailSmtpUsername": {
-            "value": "[parameters('mailSmtpUsername')]"
+            "value": "[variables('mailSmtpUsernameChecked')]"
           },
           "enableMicrosoftSso": {
             "value": "[parameters('enableMicrosoftSso')]"
           },
           "microsoftTenantId": "[if(empty(parameters('microsoftTenantId')), createObject('value', 'common'), createObject('value', parameters('microsoftTenantId')))]",
           "microsoftClientId": {
-            "value": "[parameters('microsoftClientId')]"
+            "value": "[variables('microsoftClientIdChecked')]"
           }
         },
         "template": {
@@ -1018,7 +1024,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "6412580234445209165"
+              "templateHash": "16719396847404630533"
             }
           },
           "parameters": {
@@ -1311,7 +1317,7 @@
                 "secretRef": "llm-api-key"
               }
             ],
-            "conditionalEnv": "[concat(if(empty(parameters('llmApiVersion')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_API_VERSION', 'value', parameters('llmApiVersion')))), if(empty(parameters('llmTextModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_TEXT_MODEL', 'value', parameters('llmTextModel')))), if(empty(parameters('llmSmallModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_SMALL_MODEL', 'value', parameters('llmSmallModel')))), if(empty(parameters('llmEmbeddingModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_EMBEDDING_MODEL', 'value', parameters('llmEmbeddingModel')))), if(empty(parameters('speechRegion')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_REGION', 'value', parameters('speechRegion')))), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_KEY', 'secretRef', 'azure-speech-key'))), if(empty(parameters('mailFromName')), createArray(), createArray(createObject('name', 'MAILER_FROM_NAME', 'value', parameters('mailFromName')))), if(equals(parameters('mailerAdapter'), 'none'), createArray(), createArray(createObject('name', 'MAILER_FROM_EMAIL', 'value', parameters('mailFromEmail')))), if(and(equals(parameters('mailerAdapter'), 'mailpace'), not(empty(parameters('mailpaceApiKey')))), createArray(createObject('name', 'MAILPACE_API_KEY', 'secretRef', 'mailpace-api-key')), createArray()), if(equals(parameters('mailerAdapter'), 'smtp'), createArray(createObject('name', 'MAILER_SMTP_RELAY', 'value', parameters('mailSmtpRelay')), createObject('name', 'MAILER_SMTP_PORT', 'value', string(parameters('mailSmtpPort'))), createObject('name', 'MAILER_SMTP_SSL', 'value', if(parameters('mailSmtpSsl'), 'true', 'false'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createArray(createObject('name', 'MAILER_SMTP_USERNAME', 'value', parameters('mailSmtpUsername'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpPassword')))), createArray(createObject('name', 'MAILER_SMTP_PASSWORD', 'secretRef', 'smtp-password')), createArray()), if(parameters('enableMicrosoftSso'), createArray(createObject('name', 'MICROSOFT_TENANT_ID', 'value', parameters('microsoftTenantId')), createObject('name', 'MICROSOFT_CLIENT_ID', 'value', parameters('microsoftClientId')), createObject('name', 'MICROSOFT_REDIRECT_URI', 'value', format('https://{0}/auth/microsoft/callback', parameters('phxHost'))), createObject('name', 'MICROSOFT_CLIENT_SECRET', 'secretRef', 'microsoft-client-secret')), createArray()))]"
+            "conditionalEnv": "[concat(if(empty(parameters('llmApiVersion')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_API_VERSION', 'value', parameters('llmApiVersion')))), if(empty(parameters('llmTextModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_TEXT_MODEL', 'value', parameters('llmTextModel')))), if(empty(parameters('llmSmallModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_SMALL_MODEL', 'value', parameters('llmSmallModel')))), if(empty(parameters('llmEmbeddingModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_EMBEDDING_MODEL', 'value', parameters('llmEmbeddingModel')))), if(empty(parameters('speechRegion')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_REGION', 'value', parameters('speechRegion')))), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_KEY', 'secretRef', 'azure-speech-key'))), if(empty(parameters('mailFromName')), createArray(), createArray(createObject('name', 'MAILER_FROM_NAME', 'value', parameters('mailFromName')))), if(equals(parameters('mailerAdapter'), 'none'), createArray(), createArray(createObject('name', 'MAILER_FROM_EMAIL', 'value', parameters('mailFromEmail')))), if(and(equals(parameters('mailerAdapter'), 'mailpace'), not(empty(parameters('mailpaceApiKey')))), createArray(createObject('name', 'MAILPACE_API_KEY', 'secretRef', 'mailpace-api-key')), createArray()), if(equals(parameters('mailerAdapter'), 'smtp'), createArray(createObject('name', 'MAILER_SMTP_RELAY', 'value', parameters('mailSmtpRelay')), createObject('name', 'MAILER_SMTP_PORT', 'value', string(parameters('mailSmtpPort'))), createObject('name', 'MAILER_SMTP_SSL', 'value', if(parameters('mailSmtpSsl'), 'true', 'false'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createArray(createObject('name', 'MAILER_SMTP_USERNAME', 'value', parameters('mailSmtpUsername'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createArray(createObject('name', 'MAILER_SMTP_PASSWORD', 'secretRef', 'smtp-password')), createArray()), if(parameters('enableMicrosoftSso'), createArray(createObject('name', 'MICROSOFT_TENANT_ID', 'value', parameters('microsoftTenantId')), createObject('name', 'MICROSOFT_CLIENT_ID', 'value', parameters('microsoftClientId')), createObject('name', 'MICROSOFT_REDIRECT_URI', 'value', format('https://{0}/auth/microsoft/callback', parameters('phxHost'))), createObject('name', 'MICROSOFT_CLIENT_SECRET', 'secretRef', 'microsoft-client-secret')), createArray()))]"
           },
           "resources": [
             {

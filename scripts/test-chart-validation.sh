@@ -100,19 +100,44 @@ SMTP=(
   --set-string mailer.adapter=smtp
   --set-string mailer.fromEmail=noreply@example.org
   --set-string mailer.smtp.relay=smtp.example.org
+  --set-string mailer.smtp.username=teacher
   --set-string mailer.smtp.password=ci-smtp-password
 )
 expect_pass "email disabled without any mailer credential" "${NO_MAIL[@]}"
 expect_pass "SMTP relay install" "${SMTP[@]}"
 expect_pass "SMTP relay without authentication" "${SMTP[@]}" \
-  --set-string mailer.smtp.password=
+  --set-string mailer.smtp.username= --set-string mailer.smtp.password=
 expect_pass "SMTP relay with a customer-managed password Secret" "${SMTP[@]}" \
-  --set-string mailer.smtp.username=teacher \
   --set-string mailer.smtp.password= --set-string mailer.existingSecret=my-mailer
 expect_fail "SMTP without a relay host" "${SMTP[@]}" --set-string mailer.smtp.relay=
 expect_fail "SMTP without a verified sender" "${SMTP[@]}" --set-string mailer.fromEmail=
+# The schema keeps extraEnv/extraEnvFrom as the escape hatch for the sender
+# and relay (e.g. sourced from a customer-managed Secret), so the templates
+# must not `required` them.
+expect_pass "sender and relay supplied through extraEnv" "${SMTP[@]}" \
+  --set-string mailer.fromEmail= --set-string mailer.smtp.relay= \
+  --set-string 'extraEnv[0].name=MAILER_FROM_EMAIL' --set-string 'extraEnv[0].value=noreply@example.org' \
+  --set-string 'extraEnv[1].name=MAILER_SMTP_RELAY' --set-string 'extraEnv[1].value=smtp.example.org'
+# extraEnvFrom satisfies the same requirements, but only loosely: a schema
+# cannot see inside a referenced Secret, so ANY non-empty list counts. An
+# operator who uses extraEnvFrom for something unrelated therefore trades an
+# install-time error for a boot failure -- documented in docs/configuration.md.
+expect_pass "sender and relay assumed present behind extraEnvFrom" "${SMTP[@]}" \
+  --set-string mailer.fromEmail= --set-string mailer.smtp.relay= \
+  --set-string 'extraEnvFrom[0].secretRef.name=customer-mailer-env'
 expect_fail "SMTP username without a password" "${SMTP[@]}" \
   --set-string mailer.smtp.username=teacher --set-string mailer.smtp.password=
+# The mirror image. The app authenticates only when a username is set, so a
+# lone password is dropped in silence -- the Azure template rejects the same
+# pair (mainTemplate.bicep, mailSmtpUsernameChecked).
+expect_fail "SMTP password without a username" "${SMTP[@]}" \
+  --set-string mailer.smtp.username= --set-string mailer.smtp.password=ci-smtp-password
+expect_fail "SMTP password Secret without a username" "${SMTP[@]}" \
+  --set-string mailer.smtp.username= --set-string mailer.smtp.password= \
+  --set-string mailer.existingSecret=my-mailer
+expect_pass "SMTP username supplied through extraEnv" "${SMTP[@]}" \
+  --set-string mailer.smtp.username= \
+  --set-string 'extraEnv[0].name=MAILER_SMTP_USERNAME' --set-string 'extraEnv[0].value=teacher'
 expect_render_count "SMTP CA Secret is mounted into app, migration, and seed pods" 3 \
   'secretName: customer-smtp-ca' "${SMTP[@]}" \
   --set seed.enabled=true \
@@ -134,6 +159,15 @@ expect_fail "duplicate structured env key" "${VALID[@]}" --set-string env.PHX_HO
 expect_fail "same key in env and envSecret" "${VALID[@]}" \
   --set-string env.LANGFUSE_ENVIRONMENT=production \
   --set-string envSecret.LANGFUSE_ENVIRONMENT=production
+# The seconds/milliseconds reinterpretation: 5000 was a valid ms timeout and is
+# now 5000 seconds, i.e. effectively no timeout at all. Rejected in both the
+# bare and the quoted spelling, since only the bare form sees minimum/maximum.
+expect_pass "LANGFUSE_TIMEOUT in seconds" "${VALID[@]}" --set env.LANGFUSE_TIMEOUT=2.5
+expect_pass "LANGFUSE_TIMEOUT in seconds, quoted" "${VALID[@]}" --set-string env.LANGFUSE_TIMEOUT=5
+expect_fail "LANGFUSE_TIMEOUT carried over from milliseconds" "${VALID[@]}" \
+  --set env.LANGFUSE_TIMEOUT=5000
+expect_fail "LANGFUSE_TIMEOUT carried over from milliseconds, quoted" "${VALID[@]}" \
+  --set-string env.LANGFUSE_TIMEOUT=5000
 expect_fail "invalid boolean env value" "${VALID[@]}" --set-string env.EDSPACE_SPEECH_ENABLED=banana
 # Settings managed inside the application are outside the contract on purpose
 # (`excluded:` in config/contract.yaml); the env/envSecret schema must not

@@ -25,6 +25,21 @@
         "equals": "smtp"
       }
     },
+    "MAILER_SMTP_USERNAME": {
+      "description": "MAILER_ADAPTER=smtp and MAILER_SMTP_PASSWORD is set (blank counts as missing)",
+      "condition": {
+        "all": [
+          {
+            "var": "MAILER_ADAPTER",
+            "equals": "smtp"
+          },
+          {
+            "var": "MAILER_SMTP_PASSWORD",
+            "present": true
+          }
+        ]
+      }
+    },
     "MAILER_SMTP_PASSWORD": {
       "description": "MAILER_ADAPTER=smtp and MAILER_SMTP_USERNAME is set (blank counts as missing)",
       "condition": {

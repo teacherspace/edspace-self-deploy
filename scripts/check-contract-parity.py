@@ -71,10 +71,9 @@ NOT_ENV = {
 }
 
 
-def read_contract() -> tuple[set[str], list[dict]]:
+def read_contract() -> tuple[list[dict], list[dict]]:
     data = yaml.safe_load(CONTRACT.read_text())
-    names = {v["name"] for v in (data.get("vars") or [])}
-    return names, data.get("excluded") or []
+    return data.get("vars") or [], data.get("excluded") or []
 
 
 def excluded_reason(name: str, rules: list[dict]) -> str | None:
@@ -129,7 +128,8 @@ def main() -> int:
         print(f"not an EdSpace app checkout: {app_repo}", file=sys.stderr)
         return 2
 
-    contracted, exclusions = read_contract()
+    variables, exclusions = read_contract()
+    contracted = {v["name"] for v in variables}
     found = scan(app_repo)
 
     uncovered = {
@@ -140,10 +140,9 @@ def main() -> int:
 
     # The reverse direction. Deploy-layer variables are read by compose or the
     # packaging, never by the app, so their absence here is expected.
-    data = yaml.safe_load(CONTRACT.read_text())
     unread = sorted(
         v["name"]
-        for v in data["vars"]
+        for v in variables
         if v["name"] not in found
         and v["category"] != "deploy"
         and v["name"] not in RUNTIME_CONSUMED

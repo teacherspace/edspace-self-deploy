@@ -1431,8 +1431,18 @@
           "description": "service.version tag on emitted traces."
         },
         "LANGFUSE_TIMEOUT": {
-          "type": "string",
-          "description": "Langfuse REST client timeout in SECONDS \u2014 integer or float, not milliseconds. The effective default is 5 seconds; a value like 5000 would mean 5000 seconds, and a non-numeric value raises."
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 120
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9]{1,3}(\\.[0-9]+)?$"
+            }
+          ],
+          "description": "Langfuse REST client timeout in SECONDS \u2014 integer or float, not milliseconds (earlier packaging documented this as ms; a value like 5000 now means 5000 seconds, and is rejected as out of range). A non-numeric value raises."
         },
         "EDSPACE_OTEL_LLM_PAYLOADS": {
           "type": "string",
@@ -2193,8 +2203,18 @@
           "description": "service.version tag on emitted traces."
         },
         "LANGFUSE_TIMEOUT": {
-          "type": "string",
-          "description": "Langfuse REST client timeout in SECONDS \u2014 integer or float, not milliseconds. The effective default is 5 seconds; a value like 5000 would mean 5000 seconds, and a non-numeric value raises."
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0.1,
+              "maximum": 120
+            },
+            {
+              "type": "string",
+              "pattern": "^[0-9]{1,3}(\\.[0-9]+)?$"
+            }
+          ],
+          "description": "Langfuse REST client timeout in SECONDS \u2014 integer or float, not milliseconds (earlier packaging documented this as ms; a value like 5000 now means 5000 seconds, and is rejected as out of range). A non-numeric value raises."
         },
         "EDSPACE_OTEL_LLM_PAYLOADS": {
           "type": "string",
@@ -3031,6 +3051,106 @@
                   "properties": {
                     "name": {
                       "const": "MAILER_SMTP_PASSWORD"
+                    }
+                  },
+                  "required": [
+                    "name"
+                  ]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "$comment": "The mirror image: a password source with no username is never used. The app only authenticates once MAILER_SMTP_USERNAME is set, so the credential would be dropped silently and delivery would fail against a relay that demands auth.",
+      "if": {
+        "properties": {
+          "mailer": {
+            "properties": {
+              "adapter": {
+                "const": "smtp"
+              }
+            }
+          }
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "smtp": {
+                    "properties": {
+                      "password": {
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "password"
+                    ]
+                  }
+                },
+                "required": [
+                  "smtp"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "existingSecret": {
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "existingSecret"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "smtp": {
+                    "properties": {
+                      "username": {
+                        "minLength": 1
+                      }
+                    },
+                    "required": [
+                      "username"
+                    ]
+                  }
+                },
+                "required": [
+                  "smtp"
+                ]
+              }
+            }
+          },
+          {
+            "properties": {
+              "extraEnvFrom": {
+                "minItems": 1
+              }
+            }
+          },
+          {
+            "properties": {
+              "extraEnv": {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "const": "MAILER_SMTP_USERNAME"
                     }
                   },
                   "required": [

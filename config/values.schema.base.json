@@ -746,6 +746,66 @@
       }
     },
     {
+      "$comment": "The mirror image: a password source with no username is never used. The app only authenticates once MAILER_SMTP_USERNAME is set, so the credential would be dropped silently and delivery would fail against a relay that demands auth.",
+      "if": {
+        "properties": {
+          "mailer": { "properties": { "adapter": { "const": "smtp" } } }
+        },
+        "anyOf": [
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "smtp": {
+                    "properties": { "password": { "minLength": 1 } },
+                    "required": ["password"]
+                  }
+                },
+                "required": ["smtp"]
+              }
+            }
+          },
+          {
+            "properties": {
+              "mailer": {
+                "properties": { "existingSecret": { "minLength": 1 } },
+                "required": ["existingSecret"]
+              }
+            }
+          }
+        ]
+      },
+      "then": {
+        "anyOf": [
+          {
+            "properties": {
+              "mailer": {
+                "properties": {
+                  "smtp": {
+                    "properties": { "username": { "minLength": 1 } },
+                    "required": ["username"]
+                  }
+                },
+                "required": ["smtp"]
+              }
+            }
+          },
+          { "properties": { "extraEnvFrom": { "minItems": 1 } } },
+          {
+            "properties": {
+              "extraEnv": {
+                "contains": {
+                  "type": "object",
+                  "properties": { "name": { "const": "MAILER_SMTP_USERNAME" } },
+                  "required": ["name"]
+                }
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
       "$comment": "Any real provider needs a verified sender address; adapter none does not.",
       "if": { "properties": { "mailer": { "properties": { "adapter": { "enum": ["mailpace", "smtp"] } } } } },
       "then": {

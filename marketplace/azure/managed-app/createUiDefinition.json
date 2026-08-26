@@ -52,8 +52,12 @@
             "type": "Microsoft.Common.Slider",
             "label": "Storage (GiB)",
             "subLabel": "GiB",
+            "min": 32,
+            "max": 256,
+            "step": 32,
             "defaultValue": 32,
-            "constraints": { "min": 32, "max": 256, "required": true },
+            "showStepMarkers": true,
+            "constraints": { "required": true },
             "toolTip": "Storage auto-grows; this sets the initial allocation."
           }
         ]
@@ -322,9 +326,9 @@
             "type": "Microsoft.Common.TextBox",
             "label": "SMTP username (optional)",
             "visible": "[equals(steps('application').mailerAdapter, 'smtp')]",
-            "toolTip": "Leave empty for a relay that accepts mail without authentication. Setting it makes authentication mandatory.",
+            "toolTip": "Leave empty for a relay that accepts mail without authentication. Setting it makes authentication mandatory. Required once a password is entered — a password on its own is never used.",
             "constraints": {
-              "required": false,
+              "required": "[and(equals(steps('application').mailerAdapter, 'smtp'), not(empty(steps('application').mailSmtpPassword)))]",
               "regex": "^$|^[^\\s]{1,128}$",
               "validationMessage": "Up to 128 characters, without spaces."
             }
@@ -373,11 +377,11 @@
             "label": "Directory (tenant) ID",
             "visible": "[steps('signin').enableMicrosoftSso]",
             "placeholder": "00000000-0000-0000-0000-000000000000",
-            "toolTip": "Your Entra tenant's Directory (tenant) ID, from the app registration's Overview page — only accounts in this tenant can sign in. Enter 'organizations' to accept any work or school account (multi-tenant registration required).",
+            "toolTip": "Your Entra tenant's Directory (tenant) ID, from the app registration's Overview page — only accounts in this tenant can sign in. Enter 'organizations' to accept any work or school account, or 'common' to additionally admit personal Microsoft accounts (multi-tenant registration required for either).",
             "constraints": {
               "required": "[steps('signin').enableMicrosoftSso]",
-              "regex": "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$|^organizations$",
-              "validationMessage": "Enter the tenant GUID, or 'organizations'."
+              "regex": "^$|^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$|^organizations$|^common$",
+              "validationMessage": "Enter the tenant GUID, 'organizations', or 'common'."
             }
           },
           {
