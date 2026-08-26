@@ -15,7 +15,7 @@
     },
     "containerImage": {
       "type": "string",
-      "defaultValue": "edspace.azurecr.io/edspace/edspace:1.0.2",
+      "defaultValue": "edspace.azurecr.io/edspace/edspace:1.0.3",
       "metadata": {
         "description": "Release image. The default is the pin this template was built with; customers normally leave it alone."
       }

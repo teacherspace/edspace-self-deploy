@@ -120,8 +120,8 @@ dev/floating pin.
 
 **The pin's tag scheme is the registry's, not git's.** The app repo's
 customer-release pipeline strips the `v` from the release tag when it copies
-the image (`v1.0.2` → `edspace.azurecr.io/edspace/edspace:1.0.2`), so
-`container-image.txt` must read `:1.0.2`. The guard rejects a `v` pin, and
+the image (`v1.0.3` → `edspace.azurecr.io/edspace/edspace:1.0.3`), so
+`container-image.txt` must read `:1.0.3`. The guard rejects a `v` pin, and
 `make image-check` (needs `az login`) confirms the pinned tag actually exists
 before a release is cut — a template that pins a missing tag deploys
 "successfully" and then sits in `ImagePullBackOff` behind an ACA ingress that

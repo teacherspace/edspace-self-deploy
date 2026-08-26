@@ -36,7 +36,7 @@
     },
     "containerImage": {
       "type": "string",
-      "defaultValue": "edspace.azurecr.io/edspace/edspace:1.0.2",
+      "defaultValue": "edspace.azurecr.io/edspace/edspace:1.0.3",
       "metadata": {
         "description": "App image pinned by build.sh for each managed-app definition version; vendor-operated updates move instances forward."
       }

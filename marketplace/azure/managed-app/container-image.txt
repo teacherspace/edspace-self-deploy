@@ -1,1 +1,1 @@
-edspace.azurecr.io/edspace/edspace:1.0.2
+edspace.azurecr.io/edspace/edspace:1.0.3

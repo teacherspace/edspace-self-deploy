@@ -90,7 +90,7 @@ az deployment group create -g <resource-group> \
 az containerapp update -n edspace -g <resource-group> --image edspace.azurecr.io/edspace/edspace:<version>
 ```
 
-Registry tags are the bare version (`1.0.2`) — the `v` is only on the git
+Registry tags are the bare version (`1.0.3`) — the `v` is only on the git
 release tag. Confirm what is live afterwards with `GET /version`. Rollback:
 `az containerapp revision activate` on the previous revision — safe for one
 version, since releases keep the database schema backward-compatible with the
