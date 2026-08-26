@@ -1,10 +1,13 @@
 // EdSpace Container App.
 //
-// A module (not inline in mainTemplate) so every secret arrives as a
-// @secure() parameter — either from keyVault.getSecret() or from listKeys()
-// ternaries evaluated in mainTemplate. Secrets must never travel through
-// module *outputs* (nested-deployment outputs are logged in deployment
-// history); secure module *inputs* are not logged.
+// Vault-held secrets are never passed in: the app binds them as ACA Key Vault
+// references, read at runtime with the instance's user-assigned identity. That
+// keeps mainTemplate free of keyVault.getSecret() — ARM resolves those during
+// pre-flight validation, which fails on a fresh install because the vault does
+// not exist yet. Keys that only exist as listKeys() results (storage, Azure AI)
+// still arrive here as @secure() parameters; secure nested-deployment *inputs*
+// are not logged, whereas *outputs* land in deployment history — never route a
+// secret through an output.
 
 param location string
 param tags object = {}
@@ -23,35 +26,20 @@ param phxHost string
 // mainTemplate: the custom domain plus the generated address during cutover.
 param checkOrigin string
 
+// --- key vault ---
+@description('Vault URI (with trailing slash) holding every instance secret bound below.')
+param keyVaultUri string
+@description('Resource ID of the user-assigned identity that holds a secrets/get access policy on the vault.')
+param identityId string
+
 // --- registry ---
 param registryServer string
 param registryUsername string
-@secure()
-param registryPassword string
-
-// --- database ---
-param pgAdminLogin string
-param pgFqdn string
-param pgDatabaseName string
-@secure()
-param pgAdminPassword string
 
 // --- app secrets ---
-@secure()
-param secretKeyBase string
-@secure()
-param tokenSigningSecret string
-@secure()
-param mailpaceApiKey string
-@secure()
-param mailSmtpPassword string = ''
-@secure()
-param microsoftClientSecret string = ''
-// The BYO key comes from the vault and the Azure AI key from listKeys() on a
-// conditional resource; both arrive and the selection happens here so the
-// secret binding below is unconditional.
-@secure()
-param llmApiKeyFromKv string
+// The BYO LLM key lives in the vault; the Azure AI key only exists as a
+// listKeys() result on a conditional resource, so it arrives as a parameter
+// and the selection happens here, keeping the secret binding unconditional.
 @secure()
 param llmApiKeyFromAi string = ''
 param useAiAccountKey bool
@@ -111,31 +99,35 @@ var sizes = {
   large: { cpu: '2.0', memory: '4Gi' }
 }
 
-var llmApiKey = useAiAccountKey ? llmApiKeyFromAi : llmApiKeyFromKv
-
-// uriComponent() guards against URL-reserved characters in the password;
-// ?ssl=true because Azure PG enforces TLS (require_secure_transport=on).
-var databaseUrl = 'ecto://${pgAdminLogin}:${uriComponent(pgAdminPassword)}@${pgFqdn}:5432/${pgDatabaseName}?ssl=true'
-
-// ACA secret names must match ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
-var baseSecrets = [
-  { name: 'secret-key-base', value: secretKeyBase }
-  { name: 'token-signing-secret', value: tokenSigningSecret }
-  { name: 'database-url', value: databaseUrl }
-  { name: 'azure-storage-key', value: storageAccountKey }
-  { name: 'llm-api-key', value: llmApiKey }
-  { name: 'registry-password', value: registryPassword }
-]
-// ACA rejects empty secret values, so every conditional credential is added
-// only when the adapter that uses it is selected AND a value was supplied.
-var mailerSecrets = concat(
-  mailerAdapter == 'mailpace' && !empty(mailpaceApiKey) ? [{ name: 'mailpace-api-key', value: mailpaceApiKey }] : [],
-  mailerAdapter == 'smtp' && !empty(mailSmtpPassword) ? [{ name: 'smtp-password', value: mailSmtpPassword }] : []
+// ACA secret names must match ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ and, for the
+// vault-backed ones, double as the Key Vault secret name. (A user-defined
+// function cannot read parameters, hence the map over a name list.)
+var vaultSecretNames = concat(
+  [
+    'secret-key-base'
+    'token-signing-secret'
+    'database-url'
+    'registry-password'
+  ],
+  useAiAccountKey ? [] : ['llm-api-key'],
+  // Every conditional credential is bound only when the feature using it is
+  // selected: the vault holds an `unused-…` placeholder otherwise, which must
+  // never be mounted as a real credential.
+  mailerAdapter == 'mailpace' ? ['mailpace-api-key'] : [],
+  mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? ['smtp-password'] : [],
+  enableMicrosoftSso ? ['microsoft-client-secret'] : []
 )
+var vaultSecrets = [
+  for name in vaultSecretNames: {
+    name: name
+    keyVaultUrl: '${keyVaultUri}secrets/${name}'
+    identity: identityId
+  }
+]
 var secrets = concat(
-  baseSecrets,
-  mailerSecrets,
-  enableMicrosoftSso && !empty(microsoftClientSecret) ? [{ name: 'microsoft-client-secret', value: microsoftClientSecret }] : [],
+  vaultSecrets,
+  [{ name: 'azure-storage-key', value: storageAccountKey }],
+  useAiAccountKey ? [{ name: 'llm-api-key', value: llmApiKeyFromAi }] : [],
   empty(speechKey) ? [] : [{ name: 'azure-speech-key', value: speechKey }]
 )
 
@@ -178,7 +170,7 @@ var conditionalEnv = concat(
   // A blank MAILER_FROM_EMAIL counts as missing and fails the app's boot
   // check, so it is emitted only for the adapters that read it.
   mailerAdapter == 'none' ? [] : [{ name: 'MAILER_FROM_EMAIL', value: mailFromEmail }],
-  mailerAdapter == 'mailpace' && !empty(mailpaceApiKey) ? [{ name: 'MAILPACE_API_KEY', secretRef: 'mailpace-api-key' }] : [],
+  mailerAdapter == 'mailpace' ? [{ name: 'MAILPACE_API_KEY', secretRef: 'mailpace-api-key' }] : [],
   mailerAdapter == 'smtp' ? [
     { name: 'MAILER_SMTP_RELAY', value: mailSmtpRelay }
     { name: 'MAILER_SMTP_PORT', value: string(mailSmtpPort) }
@@ -187,9 +179,8 @@ var conditionalEnv = concat(
     { name: 'MAILER_SMTP_SSL', value: mailSmtpSsl ? 'true' : 'false' }
   ] : [],
   mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? [{ name: 'MAILER_SMTP_USERNAME', value: mailSmtpUsername }] : [],
-  // Keyed off the username, not the password: mailSmtpPassword arrives as a
-  // Key Vault reference whenever a username is set, so !empty() on it would
-  // always be true and read as a check that is not actually happening.
+  // Keyed off the username: the password never enters this module, and
+  // mainTemplate's guards ensure a username always comes with one.
   mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? [{ name: 'MAILER_SMTP_PASSWORD', secretRef: 'smtp-password' }] : [],
   // Redirect URI is derived from PHX_HOST rather than asked for: it must match
   // the app registration byte-for-byte, and the host is the one thing the
@@ -208,6 +199,12 @@ resource app 'Microsoft.App/containerApps@2025-01-01' = {
   name: 'edspace'
   location: location
   tags: tags
+  // User-assigned (not system-assigned): ACA fetches Key Vault references at
+  // create time, so the identity must already hold its vault access policy.
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: { '${identityId}': {} }
+  }
   properties: {
     environmentId: environmentId
     workloadProfileName: 'Consumption'

@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.44.1.10279",
-      "templateHash": "15659086837996228841"
+      "templateHash": "6960793958129592972"
     }
   },
   "parameters": {
@@ -342,6 +342,7 @@
     "pgServerName": "[format('pg-edspace-{0}', variables('suffix'))]",
     "storageAccountName": "[format('stedspace{0}', variables('suffix'))]",
     "keyVaultName": "[format('kv-eds-{0}', variables('suffix'))]",
+    "appIdentityName": "[format('id-edspace-{0}', variables('suffix'))]",
     "aiAccountName": "[format('aif-edspace-{0}', variables('suffix'))]",
     "storageContainerName": "uploads",
     "modelDeployments": [
@@ -426,6 +427,7 @@
         }
       }
     ],
+    "pgAdminPassword": "[format('E1!{0}', replace(parameters('pgPasswordSeed'), '-', ''))]",
     "mailFromEmailChecked": "[if(and(not(equals(parameters('mailerAdapter'), 'none')), empty(parameters('mailFromEmail'))), fail('mailFromEmail is required unless mailerAdapter is \"none\".'), parameters('mailFromEmail'))]",
     "mailSmtpRelayChecked": "[if(and(equals(parameters('mailerAdapter'), 'smtp'), empty(parameters('mailSmtpRelay'))), fail('mailSmtpRelay is required when mailerAdapter is \"smtp\".'), parameters('mailSmtpRelay'))]",
     "mailSmtpUsernameChecked": "[if(and(and(equals(parameters('mailerAdapter'), 'smtp'), empty(parameters('mailSmtpUsername'))), not(empty(parameters('mailSmtpPassword')))), fail('mailSmtpPassword was supplied without mailSmtpUsername; set both, or neither for an unauthenticated relay.'), if(and(and(and(equals(parameters('mailerAdapter'), 'smtp'), parameters('bootstrapSecrets')), not(empty(parameters('mailSmtpUsername')))), empty(parameters('mailSmtpPassword'))), fail('mailSmtpUsername was supplied without mailSmtpPassword; set both, or neither for an unauthenticated relay.'), parameters('mailSmtpUsername')))]",
@@ -563,6 +565,13 @@
       ]
     },
     {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2024-11-30",
+      "name": "[variables('appIdentityName')]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('resourceTags')]"
+    },
+    {
       "type": "Microsoft.KeyVault/vaults",
       "apiVersion": "2025-05-01",
       "name": "[variables('keyVaultName')]",
@@ -574,13 +583,25 @@
           "name": "standard"
         },
         "tenantId": "[subscription().tenantId]",
-        "enabledForTemplateDeployment": true,
         "enableSoftDelete": true,
         "enablePurgeProtection": true,
         "softDeleteRetentionInDays": 90,
         "enableRbacAuthorization": false,
-        "accessPolicies": []
-      }
+        "accessPolicies": [
+          {
+            "tenantId": "[subscription().tenantId]",
+            "objectId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('appIdentityName')), '2024-11-30').principalId]",
+            "permissions": {
+              "secrets": [
+                "get"
+              ]
+            }
+          }
+        ]
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('appIdentityName'))]"
+      ]
     },
     {
       "condition": "[parameters('bootstrapSecrets')]",
@@ -612,10 +633,23 @@
       "apiVersion": "2025-05-01",
       "name": "[format('{0}/{1}', variables('keyVaultName'), 'pg-admin-password')]",
       "properties": {
-        "value": "[format('E1!{0}', replace(parameters('pgPasswordSeed'), '-', ''))]"
+        "value": "[variables('pgAdminPassword')]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
+      ]
+    },
+    {
+      "condition": "[parameters('bootstrapSecrets')]",
+      "type": "Microsoft.KeyVault/vaults/secrets",
+      "apiVersion": "2025-05-01",
+      "name": "[format('{0}/{1}', variables('keyVaultName'), 'database-url')]",
+      "properties": {
+        "value": "[format('ecto://{0}:{1}@{2}:5432/{3}?ssl=true', reference(resourceId('Microsoft.Resources/deployments', 'edspace-postgres'), '2025-04-01').outputs.adminLogin.value, uriComponent(variables('pgAdminPassword')), reference(resourceId('Microsoft.Resources/deployments', 'edspace-postgres'), '2025-04-01').outputs.fqdn.value, reference(resourceId('Microsoft.Resources/deployments', 'edspace-postgres'), '2025-04-01').outputs.databaseName.value)]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
+        "[resourceId('Microsoft.Resources/deployments', 'edspace-postgres')]"
       ]
     },
     {
@@ -710,14 +744,7 @@
             "value": "[parameters('pgBackupRetentionDays')]"
           },
           "geoRedundantBackup": "[if(parameters('pgGeoRedundantBackup'), createObject('value', 'Enabled'), createObject('value', 'Disabled'))]",
-          "administratorLoginPassword": {
-            "reference": {
-              "keyVault": {
-                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
-              },
-              "secretName": "pg-admin-password"
-            }
-          }
+          "administratorLoginPassword": "[if(parameters('bootstrapSecrets'), createObject('value', variables('pgAdminPassword')), createObject('value', ''))]"
         },
         "template": {
           "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
@@ -726,7 +753,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "11532111233199147721"
+              "templateHash": "11566454566458276618"
             }
           },
           "parameters": {
@@ -745,7 +772,8 @@
               "defaultValue": "edspace"
             },
             "administratorLoginPassword": {
-              "type": "securestring"
+              "type": "securestring",
+              "defaultValue": ""
             },
             "skuName": {
               "type": "string",
@@ -797,7 +825,7 @@
               "properties": {
                 "version": "16",
                 "administratorLogin": "[parameters('administratorLogin')]",
-                "administratorLoginPassword": "[parameters('administratorLoginPassword')]",
+                "administratorLoginPassword": "[if(empty(parameters('administratorLoginPassword')), null(), parameters('administratorLoginPassword'))]",
                 "storage": {
                   "storageSizeGB": "[parameters('storageSizeGB')]",
                   "autoGrow": "Enabled"
@@ -869,11 +897,7 @@
             }
           }
         }
-      },
-      "dependsOn": [
-        "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
-        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'pg-admin-password')]"
-      ]
+      }
     },
     {
       "type": "Microsoft.Resources/deployments",
@@ -902,63 +926,17 @@
           },
           "phxHost": "[if(empty(parameters('customDomain')), createObject('value', format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain)), createObject('value', parameters('customDomain')))]",
           "checkOrigin": "[if(empty(parameters('customDomain')), createObject('value', format('https://{0}', format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain))), createObject('value', format('https://{0},https://{1}', parameters('customDomain'), format('edspace.{0}', reference(resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName')), '2025-01-01').defaultDomain))))]",
+          "keyVaultUri": {
+            "value": "[reference(resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName')), '2025-05-01').vaultUri]"
+          },
+          "identityId": {
+            "value": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('appIdentityName'))]"
+          },
           "registryServer": {
             "value": "[parameters('registryServer')]"
           },
           "registryUsername": {
             "value": "[parameters('registryUsername')]"
-          },
-          "registryPassword": {
-            "reference": {
-              "keyVault": {
-                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
-              },
-              "secretName": "registry-password"
-            }
-          },
-          "pgAdminLogin": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'edspace-postgres'), '2025-04-01').outputs.adminLogin.value]"
-          },
-          "pgFqdn": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'edspace-postgres'), '2025-04-01').outputs.fqdn.value]"
-          },
-          "pgDatabaseName": {
-            "value": "[reference(resourceId('Microsoft.Resources/deployments', 'edspace-postgres'), '2025-04-01').outputs.databaseName.value]"
-          },
-          "pgAdminPassword": {
-            "reference": {
-              "keyVault": {
-                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
-              },
-              "secretName": "pg-admin-password"
-            }
-          },
-          "secretKeyBase": {
-            "reference": {
-              "keyVault": {
-                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
-              },
-              "secretName": "secret-key-base"
-            }
-          },
-          "tokenSigningSecret": {
-            "reference": {
-              "keyVault": {
-                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
-              },
-              "secretName": "token-signing-secret"
-            }
-          },
-          "mailpaceApiKey": "[if(equals(parameters('mailerAdapter'), 'mailpace'), createObject('reference', createObject('keyVault', createObject('id', resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))), 'secretName', 'mailpace-api-key')), createObject('value', ''))]",
-          "mailSmtpPassword": "[if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createObject('reference', createObject('keyVault', createObject('id', resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))), 'secretName', 'smtp-password')), createObject('value', ''))]",
-          "microsoftClientSecret": "[if(parameters('enableMicrosoftSso'), createObject('reference', createObject('keyVault', createObject('id', resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))), 'secretName', 'microsoft-client-secret')), createObject('value', ''))]",
-          "llmApiKeyFromKv": {
-            "reference": {
-              "keyVault": {
-                "id": "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]"
-              },
-              "secretName": "llm-api-key"
-            }
           },
           "llmApiKeyFromAi": "[if(parameters('enableAzureAi'), createObject('value', listKeys(resourceId('Microsoft.CognitiveServices/accounts', variables('aiAccountName')), '2025-09-01').key1), createObject('value', ''))]",
           "useAiAccountKey": {
@@ -1024,7 +1002,7 @@
             "_generator": {
               "name": "bicep",
               "version": "0.44.1.10279",
-              "templateHash": "16719396847404630533"
+              "templateHash": "16682100567345227745"
             }
           },
           "parameters": {
@@ -1058,46 +1036,23 @@
             "checkOrigin": {
               "type": "string"
             },
+            "keyVaultUri": {
+              "type": "string",
+              "metadata": {
+                "description": "Vault URI (with trailing slash) holding every instance secret bound below."
+              }
+            },
+            "identityId": {
+              "type": "string",
+              "metadata": {
+                "description": "Resource ID of the user-assigned identity that holds a secrets/get access policy on the vault."
+              }
+            },
             "registryServer": {
               "type": "string"
             },
             "registryUsername": {
               "type": "string"
-            },
-            "registryPassword": {
-              "type": "securestring"
-            },
-            "pgAdminLogin": {
-              "type": "string"
-            },
-            "pgFqdn": {
-              "type": "string"
-            },
-            "pgDatabaseName": {
-              "type": "string"
-            },
-            "pgAdminPassword": {
-              "type": "securestring"
-            },
-            "secretKeyBase": {
-              "type": "securestring"
-            },
-            "tokenSigningSecret": {
-              "type": "securestring"
-            },
-            "mailpaceApiKey": {
-              "type": "securestring"
-            },
-            "mailSmtpPassword": {
-              "type": "securestring",
-              "defaultValue": ""
-            },
-            "microsoftClientSecret": {
-              "type": "securestring",
-              "defaultValue": ""
-            },
-            "llmApiKeyFromKv": {
-              "type": "securestring"
             },
             "llmApiKeyFromAi": {
               "type": "securestring",
@@ -1201,6 +1156,17 @@
             }
           },
           "variables": {
+            "copy": [
+              {
+                "name": "vaultSecrets",
+                "count": "[length(variables('vaultSecretNames'))]",
+                "input": {
+                  "name": "[variables('vaultSecretNames')[copyIndex('vaultSecrets')]]",
+                  "keyVaultUrl": "[format('{0}secrets/{1}', parameters('keyVaultUri'), variables('vaultSecretNames')[copyIndex('vaultSecrets')])]",
+                  "identity": "[parameters('identityId')]"
+                }
+              }
+            ],
             "sizes": {
               "standard": {
                 "cpu": "1.0",
@@ -1211,36 +1177,8 @@
                 "memory": "4Gi"
               }
             },
-            "llmApiKey": "[if(parameters('useAiAccountKey'), parameters('llmApiKeyFromAi'), parameters('llmApiKeyFromKv'))]",
-            "databaseUrl": "[format('ecto://{0}:{1}@{2}:5432/{3}?ssl=true', parameters('pgAdminLogin'), uriComponent(parameters('pgAdminPassword')), parameters('pgFqdn'), parameters('pgDatabaseName'))]",
-            "baseSecrets": [
-              {
-                "name": "secret-key-base",
-                "value": "[parameters('secretKeyBase')]"
-              },
-              {
-                "name": "token-signing-secret",
-                "value": "[parameters('tokenSigningSecret')]"
-              },
-              {
-                "name": "database-url",
-                "value": "[variables('databaseUrl')]"
-              },
-              {
-                "name": "azure-storage-key",
-                "value": "[parameters('storageAccountKey')]"
-              },
-              {
-                "name": "llm-api-key",
-                "value": "[variables('llmApiKey')]"
-              },
-              {
-                "name": "registry-password",
-                "value": "[parameters('registryPassword')]"
-              }
-            ],
-            "mailerSecrets": "[concat(if(and(equals(parameters('mailerAdapter'), 'mailpace'), not(empty(parameters('mailpaceApiKey')))), createArray(createObject('name', 'mailpace-api-key', 'value', parameters('mailpaceApiKey'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpPassword')))), createArray(createObject('name', 'smtp-password', 'value', parameters('mailSmtpPassword'))), createArray()))]",
-            "secrets": "[concat(variables('baseSecrets'), variables('mailerSecrets'), if(and(parameters('enableMicrosoftSso'), not(empty(parameters('microsoftClientSecret')))), createArray(createObject('name', 'microsoft-client-secret', 'value', parameters('microsoftClientSecret'))), createArray()), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'azure-speech-key', 'value', parameters('speechKey')))))]",
+            "vaultSecretNames": "[concat(createArray('secret-key-base', 'token-signing-secret', 'database-url', 'registry-password'), if(parameters('useAiAccountKey'), createArray(), createArray('llm-api-key')), if(equals(parameters('mailerAdapter'), 'mailpace'), createArray('mailpace-api-key'), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createArray('smtp-password'), createArray()), if(parameters('enableMicrosoftSso'), createArray('microsoft-client-secret'), createArray()))]",
+            "secrets": "[concat(variables('vaultSecrets'), createArray(createObject('name', 'azure-storage-key', 'value', parameters('storageAccountKey'))), if(parameters('useAiAccountKey'), createArray(createObject('name', 'llm-api-key', 'value', parameters('llmApiKeyFromAi'))), createArray()), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'azure-speech-key', 'value', parameters('speechKey')))))]",
             "plainEnv": [
               {
                 "name": "PHX_HOST",
@@ -1317,7 +1255,7 @@
                 "secretRef": "llm-api-key"
               }
             ],
-            "conditionalEnv": "[concat(if(empty(parameters('llmApiVersion')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_API_VERSION', 'value', parameters('llmApiVersion')))), if(empty(parameters('llmTextModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_TEXT_MODEL', 'value', parameters('llmTextModel')))), if(empty(parameters('llmSmallModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_SMALL_MODEL', 'value', parameters('llmSmallModel')))), if(empty(parameters('llmEmbeddingModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_EMBEDDING_MODEL', 'value', parameters('llmEmbeddingModel')))), if(empty(parameters('speechRegion')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_REGION', 'value', parameters('speechRegion')))), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_KEY', 'secretRef', 'azure-speech-key'))), if(empty(parameters('mailFromName')), createArray(), createArray(createObject('name', 'MAILER_FROM_NAME', 'value', parameters('mailFromName')))), if(equals(parameters('mailerAdapter'), 'none'), createArray(), createArray(createObject('name', 'MAILER_FROM_EMAIL', 'value', parameters('mailFromEmail')))), if(and(equals(parameters('mailerAdapter'), 'mailpace'), not(empty(parameters('mailpaceApiKey')))), createArray(createObject('name', 'MAILPACE_API_KEY', 'secretRef', 'mailpace-api-key')), createArray()), if(equals(parameters('mailerAdapter'), 'smtp'), createArray(createObject('name', 'MAILER_SMTP_RELAY', 'value', parameters('mailSmtpRelay')), createObject('name', 'MAILER_SMTP_PORT', 'value', string(parameters('mailSmtpPort'))), createObject('name', 'MAILER_SMTP_SSL', 'value', if(parameters('mailSmtpSsl'), 'true', 'false'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createArray(createObject('name', 'MAILER_SMTP_USERNAME', 'value', parameters('mailSmtpUsername'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createArray(createObject('name', 'MAILER_SMTP_PASSWORD', 'secretRef', 'smtp-password')), createArray()), if(parameters('enableMicrosoftSso'), createArray(createObject('name', 'MICROSOFT_TENANT_ID', 'value', parameters('microsoftTenantId')), createObject('name', 'MICROSOFT_CLIENT_ID', 'value', parameters('microsoftClientId')), createObject('name', 'MICROSOFT_REDIRECT_URI', 'value', format('https://{0}/auth/microsoft/callback', parameters('phxHost'))), createObject('name', 'MICROSOFT_CLIENT_SECRET', 'secretRef', 'microsoft-client-secret')), createArray()))]"
+            "conditionalEnv": "[concat(if(empty(parameters('llmApiVersion')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_API_VERSION', 'value', parameters('llmApiVersion')))), if(empty(parameters('llmTextModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_TEXT_MODEL', 'value', parameters('llmTextModel')))), if(empty(parameters('llmSmallModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_SMALL_MODEL', 'value', parameters('llmSmallModel')))), if(empty(parameters('llmEmbeddingModel')), createArray(), createArray(createObject('name', 'EDSPACE_LLM_EMBEDDING_MODEL', 'value', parameters('llmEmbeddingModel')))), if(empty(parameters('speechRegion')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_REGION', 'value', parameters('speechRegion')))), if(empty(parameters('speechKey')), createArray(), createArray(createObject('name', 'AZURE_SPEECH_KEY', 'secretRef', 'azure-speech-key'))), if(empty(parameters('mailFromName')), createArray(), createArray(createObject('name', 'MAILER_FROM_NAME', 'value', parameters('mailFromName')))), if(equals(parameters('mailerAdapter'), 'none'), createArray(), createArray(createObject('name', 'MAILER_FROM_EMAIL', 'value', parameters('mailFromEmail')))), if(equals(parameters('mailerAdapter'), 'mailpace'), createArray(createObject('name', 'MAILPACE_API_KEY', 'secretRef', 'mailpace-api-key')), createArray()), if(equals(parameters('mailerAdapter'), 'smtp'), createArray(createObject('name', 'MAILER_SMTP_RELAY', 'value', parameters('mailSmtpRelay')), createObject('name', 'MAILER_SMTP_PORT', 'value', string(parameters('mailSmtpPort'))), createObject('name', 'MAILER_SMTP_SSL', 'value', if(parameters('mailSmtpSsl'), 'true', 'false'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createArray(createObject('name', 'MAILER_SMTP_USERNAME', 'value', parameters('mailSmtpUsername'))), createArray()), if(and(equals(parameters('mailerAdapter'), 'smtp'), not(empty(parameters('mailSmtpUsername')))), createArray(createObject('name', 'MAILER_SMTP_PASSWORD', 'secretRef', 'smtp-password')), createArray()), if(parameters('enableMicrosoftSso'), createArray(createObject('name', 'MICROSOFT_TENANT_ID', 'value', parameters('microsoftTenantId')), createObject('name', 'MICROSOFT_CLIENT_ID', 'value', parameters('microsoftClientId')), createObject('name', 'MICROSOFT_REDIRECT_URI', 'value', format('https://{0}/auth/microsoft/callback', parameters('phxHost'))), createObject('name', 'MICROSOFT_CLIENT_SECRET', 'secretRef', 'microsoft-client-secret')), createArray()))]"
           },
           "resources": [
             {
@@ -1326,6 +1264,12 @@
               "name": "edspace",
               "location": "[parameters('location')]",
               "tags": "[parameters('tags')]",
+              "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                  "[format('{0}', parameters('identityId'))]": {}
+                }
+              },
               "properties": {
                 "environmentId": "[parameters('environmentId')]",
                 "workloadProfileName": "Consumption",
@@ -1408,12 +1352,12 @@
         "[resourceId('Microsoft.App/managedEnvironments', variables('acaEnvName'))]",
         "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiAccountName'))]",
         "aiModelDeployments",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', variables('appIdentityName'))]",
+        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'database-url')]",
         "[resourceId('Microsoft.KeyVault/vaults', variables('keyVaultName'))]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'llm-api-key')]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'mailpace-api-key')]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'microsoft-client-secret')]",
-        "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'pg-admin-password')]",
-        "[resourceId('Microsoft.Resources/deployments', 'edspace-postgres')]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'registry-password')]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'secret-key-base')]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'smtp-password')]",

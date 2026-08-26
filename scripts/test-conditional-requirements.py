@@ -147,8 +147,8 @@ def main() -> None:
         # simply take a blank value and fail with an opaque ARM BadRequest.
         "authenticated SMTP writes its password through the pairing guard":
             "mailerAdapter == 'smtp' && !empty(mailSmtpUsernameChecked) ? mailSmtpPassword",
-        "authenticated SMTP loads the password Secret":
-            "mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? keyVault.getSecret('smtp-password') : ''",
+        "authenticated SMTP binds the password Secret":
+            "mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? ['smtp-password'] : []",
         "disabled Entra emits no provider configuration":
             "enableMicrosoftSso ? [\n    { name: 'MICROSOFT_TENANT_ID'",
         # A custom domain is bound after install; both origins must stay

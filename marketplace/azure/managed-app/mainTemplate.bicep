@@ -10,9 +10,14 @@
 //   * First deploy runs with bootstrapSecrets=true (createUiDefinition pins
 //     it): @secure() params defaulting to newGuid() are persisted into the
 //     instance Key Vault.
-//   * Every consumer reads secrets from the vault via getSecret(), never the
-//     raw params — so re-deployments with bootstrapSecrets=false are fully
-//     idempotent (nothing rotates, no secure params need to be supplied).
+//   * The container app binds every vault secret as an ACA Key Vault
+//     reference (read at runtime by a user-assigned identity), and PostgreSQL
+//     only receives its password at bootstrap — so re-deployments with
+//     bootstrapSecrets=false are fully idempotent (nothing rotates, no secure
+//     params need to be supplied).
+//   * No keyVault.getSecret(): ARM resolves those during pre-flight
+//     validation, before anything exists, so a fresh install would fail with
+//     KeyVaultParameterReferenceNotFound.
 //   * Vendor-operated redeploys MUST pass bootstrapSecrets=false. Marketplace
 //     definition versions are for NEW installs only. Image-only updates use
 //     `az containerapp update` and never touch this template.
@@ -219,6 +224,7 @@ var acaEnvName = 'cae-edspace-${suffix}'
 var pgServerName = 'pg-edspace-${suffix}' // global DNS name -> suffix mandatory
 var storageAccountName = 'stedspace${suffix}' // 22 chars, <= 24 limit
 var keyVaultName = 'kv-eds-${suffix}' // 20 chars, <= 24 limit
+var appIdentityName = 'id-edspace-${suffix}'
 var aiAccountName = 'aif-edspace-${suffix}'
 var storageContainerName = 'uploads'
 
@@ -408,6 +414,16 @@ resource aiModelDeployments 'Microsoft.CognitiveServices/accounts/deployments@20
 ]
 
 // ----------------------------------------------------------------- key vault
+// The app reads its secrets from the vault at runtime through this identity.
+// User-assigned rather than the app's own system identity: ACA resolves Key
+// Vault references when the app is created, so the access policy must exist
+// before the app does.
+resource appIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2024-11-30' = {
+  name: appIdentityName
+  location: location
+  tags: resourceTags
+}
+
 resource keyVault 'Microsoft.KeyVault/vaults@2025-05-01' = {
   name: keyVaultName
   location: location
@@ -415,15 +431,21 @@ resource keyVault 'Microsoft.KeyVault/vaults@2025-05-01' = {
   properties: {
     sku: { family: 'A', name: 'standard' }
     tenantId: subscription().tenantId
-    enabledForTemplateDeployment: true // required for getSecret() below
     enableSoftDelete: true
     enablePurgeProtection: true // the vault holds every instance secret; purge would be unrecoverable
     softDeleteRetentionInDays: 90
     enableRbacAuthorization: false
-    // Publisher authorization is control-plane access on the managed RG.
-    // Do not grant a publisher-tenant principal permanent customer-vault data
-    // access: Key Vault callers must be registered in the vault's tenant.
-    accessPolicies: []
+    // The app identity is the ONLY data-plane principal. Publisher
+    // authorization is control-plane access on the managed RG; do not grant a
+    // publisher-tenant principal permanent customer-vault data access — Key
+    // Vault callers must be registered in the vault's tenant.
+    accessPolicies: [
+      {
+        tenantId: subscription().tenantId
+        objectId: appIdentity.properties.principalId
+        permissions: { secrets: ['get'] }
+      }
+    ]
   }
 }
 
@@ -442,11 +464,27 @@ resource tokenSigningSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if 
   properties: { value: replace(tokenSigningSeed, '-', '') }
 }
 
+// Prefix guarantees the 3-of-4 character classes Azure PG requires. Only read
+// under bootstrapSecrets=true (both consumers gate on it), so the newGuid()
+// default never rotates anything on a redeploy.
+var pgAdminPassword = 'E1!${replace(pgPasswordSeed, '-', '')}'
+
 resource pgAdminPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'pg-admin-password'
-  // Prefix guarantees the 3-of-4 character classes Azure PG requires.
-  properties: { value: 'E1!${replace(pgPasswordSeed, '-', '')}' }
+  properties: { value: pgAdminPassword }
+}
+
+// The app binds DATABASE_URL straight from the vault, so the composed URL is
+// persisted alongside the raw password. uriComponent() guards against
+// URL-reserved characters; ?ssl=true because Azure PG enforces TLS
+// (require_secure_transport=on). Depends on the server via its fqdn output.
+resource databaseUrlSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
+  parent: keyVault
+  name: 'database-url'
+  properties: {
+    value: 'ecto://${postgres.outputs.adminLogin}:${uriComponent(pgAdminPassword)}@${postgres.outputs.fqdn}:5432/${postgres.outputs.databaseName}?ssl=true'
+  }
 }
 
 // Both mailer credentials are always created, with a placeholder when the
@@ -488,8 +526,9 @@ resource registryPasswordSecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' =
   properties: { value: registryPassword }
 }
 
-// Always present so the container-app module can bind it unconditionally;
-// holds the BYO key, or a placeholder when Azure AI serves the key instead.
+// Always present so a later redeploy that switches to BYO finds it; holds the
+// BYO key, or a placeholder when Azure AI serves the key instead (the app
+// module then binds the AI key and never reads this secret).
 resource llmApiKeySecret 'Microsoft.KeyVault/vaults/secrets@2025-05-01' = if (bootstrapSecrets) {
   parent: keyVault
   name: 'llm-api-key'
@@ -508,11 +547,10 @@ module postgres 'modules/postgres.bicep' = {
     storageSizeGB: pgStorageGB
     backupRetentionDays: pgBackupRetentionDays
     geoRedundantBackup: pgGeoRedundantBackup ? 'Enabled' : 'Disabled'
-    administratorLoginPassword: keyVault.getSecret('pg-admin-password')
+    // Empty on a redeploy: the module then omits the property and the
+    // existing server keeps the password the vault already holds.
+    administratorLoginPassword: bootstrapSecrets ? pgAdminPassword : ''
   }
-  // getSecret() adds a dependency on the VAULT, not the secret — make the
-  // ordering explicit (ignored when bootstrapSecrets=false skips the resource).
-  dependsOn: [pgAdminPasswordSecret]
 }
 
 // ----------------------------------------------------------------------- app
@@ -581,21 +619,12 @@ module app 'modules/containerApp.bicep' = {
     phxHost: phxHost
     checkOrigin: checkOrigin
 
+    keyVaultUri: keyVault.properties.vaultUri
+    identityId: appIdentity.id
+
     registryServer: registryServer
     registryUsername: registryUsername
-    registryPassword: keyVault.getSecret('registry-password')
 
-    pgAdminLogin: postgres.outputs.adminLogin
-    pgFqdn: postgres.outputs.fqdn
-    pgDatabaseName: postgres.outputs.databaseName
-    pgAdminPassword: keyVault.getSecret('pg-admin-password')
-
-    secretKeyBase: keyVault.getSecret('secret-key-base')
-    tokenSigningSecret: keyVault.getSecret('token-signing-secret')
-    mailpaceApiKey: mailerAdapter == 'mailpace' ? keyVault.getSecret('mailpace-api-key') : ''
-    mailSmtpPassword: mailerAdapter == 'smtp' && !empty(mailSmtpUsername) ? keyVault.getSecret('smtp-password') : ''
-    microsoftClientSecret: enableMicrosoftSso ? keyVault.getSecret('microsoft-client-secret') : ''
-    llmApiKeyFromKv: keyVault.getSecret('llm-api-key')
     // BCP422: lazy if() — listKeys only evaluates when enableAzureAi is true,
     // so the conditional resource is guaranteed to exist at call time.
     #disable-next-line BCP422 use-secure-value-for-secure-inputs
@@ -642,10 +671,12 @@ module app 'modules/containerApp.bicep' = {
     microsoftTenantId: empty(microsoftTenantId) ? 'common' : microsoftTenantId
     microsoftClientId: microsoftClientIdChecked
   }
+  // ACA fetches every Key Vault reference when the app is created, so each
+  // bound secret must already exist (no-ops when bootstrapSecrets=false).
   dependsOn: [
     secretKeyBaseSecret
     tokenSigningSecret
-    pgAdminPasswordSecret
+    databaseUrlSecret
     mailpaceApiKeySecret
     smtpPasswordSecret
     microsoftClientSecretSecret

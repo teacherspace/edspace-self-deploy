@@ -152,8 +152,15 @@ will be authorized on the test definition; it rejects missing/zero values.
   Microsoft SSO on an existing instance therefore means setting the secret
   first**, with the same `az keyvault secret set` calls above, whether or not
   it already exists.
-- **Every consumer reads from the vault** via `getSecret()`; raw parameters
-  are never used directly downstream.
+- **The container app reads every secret from the vault at runtime**, as ACA
+  Key Vault references resolved by the instance's user-assigned identity
+  (`id-edspace-<suffix>`, the vault's only data-plane principal). `DATABASE_URL`
+  is therefore persisted as a composed `database-url` secret at bootstrap, next
+  to the raw `pg-admin-password`. PostgreSQL receives the generated password
+  directly on first install; a `bootstrapSecrets=false` redeploy omits it and
+  the server keeps what it has. No `keyVault.getSecret()` anywhere: ARM resolves
+  those at pre-flight validation, before the vault exists, so a fresh install
+  would fail with `KeyVaultParameterReferenceNotFound`.
 - Parameter combinations the portal form cannot produce, but a CLI or
   parameters-file deployment can, are rejected up front by `fail()` guards in
   `mainTemplate.bicep` (the `…Checked` variables): a missing sender, relay,
@@ -178,13 +185,15 @@ Don't.
 ## Design notes
 
 - `mainTemplate.bicep` is fully self-contained (marketplace requirement — no
-  registry module references). Only two local modules exist, because
-  `keyVault.getSecret()` is legal solely as a `@secure()` **module** parameter:
+  registry module references). Two local modules exist so that secret values
+  cross into them only as `@secure()` inputs, which are not logged:
   `modules/postgres.bicep` (admin password) and `modules/containerApp.bicep`
-  (all app secrets). Everything needing `listKeys()` on a *conditional*
-  resource (AI account) stays top-level: a symbolic-name reference inside a
-  ternary compiles to a lazily-evaluated ARM `if()`. Never route keys through
-  module **outputs** — nested-deployment outputs land in deployment history.
+  (storage / Azure AI keys; vault secrets are bound as Key Vault references
+  and never enter the template). Everything needing `listKeys()` on a
+  *conditional* resource (AI account) stays top-level: a symbolic-name
+  reference inside a ternary compiles to a lazily-evaluated ARM `if()`. Never
+  route keys through module **outputs** — nested-deployment outputs land in
+  deployment history.
 - **Scale**: min=max=1 replica; scale vertically via `appSize`
   (standard 1 vCPU/2 GiB, large 2 vCPU/4 GiB — ACA enforces 1:2 pairs).
   Multi-replica needs Erlang clustering, out of scope on ACA (v1 limitation).
@@ -240,8 +249,8 @@ Don't.
   not as a customer Key Vault policy. Managed-app operations use the
   publisher-tenant identity's projected control-plane access to the managed
   resource group. The vault intentionally grants no permanent publisher data-
-  plane access; ARM template deployment reads its secrets through
-  `enabledForTemplateDeployment`.
+  plane access; its only access policy is `secrets/get` for the app's
+  user-assigned identity.
 
 ## Custom domain runbook (publisher support)
 

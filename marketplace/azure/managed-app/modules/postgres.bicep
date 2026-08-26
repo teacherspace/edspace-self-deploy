@@ -1,16 +1,18 @@
 // PostgreSQL Flexible Server for one EdSpace managed-app instance.
 //
-// A module (not inline in mainTemplate) so the admin password can arrive as a
-// @secure() parameter fed by keyVault.getSecret() — the only place Bicep
-// permits that call.
+// A module (not inline in mainTemplate) so the admin password arrives as a
+// @secure() parameter — secure nested-deployment inputs are not logged.
 
 param serverName string
 param location string
 param tags object = {}
 
 param administratorLogin string = 'edspace'
+// Empty on a bootstrapSecrets=false redeploy: the property is then omitted
+// from the PUT, which leaves an existing server's password untouched (Azure
+// only requires it at creation). Required, non-empty, on first install.
 @secure()
-param administratorLoginPassword string
+param administratorLoginPassword string = ''
 
 param skuName string = 'Standard_B2s'
 param skuTier string = 'Burstable'
@@ -50,7 +52,7 @@ resource server 'Microsoft.DBforPostgreSQL/flexibleServers@2025-08-01' = {
   properties: {
     version: '16' // platform provisions a current minor (app requires >= 16.3)
     administratorLogin: administratorLogin
-    administratorLoginPassword: administratorLoginPassword
+    administratorLoginPassword: empty(administratorLoginPassword) ? null : administratorLoginPassword
     storage: {
       storageSizeGB: storageSizeGB
       autoGrow: 'Enabled'
