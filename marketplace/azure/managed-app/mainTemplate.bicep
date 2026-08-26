@@ -331,12 +331,6 @@ resource storage 'Microsoft.Storage/storageAccounts@2025-01-01' = {
   }
 }
 
-// Deletion must be real (EdSpace TEA-2719, DPA Bilag C.4): the uploads
-// container holds personal data, and the app promises that a deleted file
-// leaves no retrievable bytes behind. Azure's defaults already have these off,
-// but a self-hoster clicking "enable soft delete" in the portal would silently
-// break that promise, so the compliant values are pinned here and the app's
-// nightly deletion-assurance probe fails if they drift.
 resource blobService 'Microsoft.Storage/storageAccounts/blobServices@2025-01-01' = {
   parent: storage
   name: 'default'
