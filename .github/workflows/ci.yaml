@@ -84,7 +84,11 @@ jobs:
           # first failure kills the step before the summary below can list
           # any of them. Collect every result, then decide.
           $ErrorActionPreference = 'Continue'
-          $results = Test-AzTemplate -TemplatePath marketplace/azure/managed-app/dist -Skip 'URIs Should Be Properly Constructed'
+          # Two folders, two runs: the update template lives outside dist/
+          # (see build.sh) because a second template in the package folder
+          # breaks ARM-TTK's inner-template extraction for the whole folder.
+          $results = @(Test-AzTemplate -TemplatePath marketplace/azure/managed-app/dist -Skip 'URIs Should Be Properly Constructed') +
+            @(Test-AzTemplate -TemplatePath marketplace/azure/managed-app/dist-update -Skip 'URIs Should Be Properly Constructed')
           $failed = @($results | Where-Object { -not $_.Passed })
           $failed | ForEach-Object { Write-Host "FAIL [$($_.Group)] $($_.Name)"; $_.Errors | ForEach-Object { Write-Host "   $_" } }
           if ($failed.Count -gt 0) { exit 1 }

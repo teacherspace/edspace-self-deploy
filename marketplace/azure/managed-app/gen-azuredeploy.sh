@@ -31,14 +31,14 @@ if [ "$CHECK" = 1 ]; then
     echo "azuredeploy.json is stale — run 'make bicep-gen' and commit the result" >&2
     exit 1
   fi
-  if ! diff <(normalize dist/update.json) <(normalize update.json); then
+  if ! diff <(normalize dist-update/mainTemplate.json) <(normalize update.json); then
     echo "update.json is stale — run 'make bicep-gen' and commit the result" >&2
     exit 1
   fi
   echo "azuredeploy.json and update.json are current"
 else
   cp dist/mainTemplate.json azuredeploy.json
-  cp dist/update.json update.json
+  cp dist-update/mainTemplate.json update.json
   echo "wrote azuredeploy.json ($(jq -r '.parameters.containerImage.defaultValue' azuredeploy.json))"
   echo "wrote update.json ($(jq -r '.parameters.containerImage.defaultValue' update.json))"
 fi

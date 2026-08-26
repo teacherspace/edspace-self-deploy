@@ -140,7 +140,7 @@ ARM-TTK (the test suite marketplace certification runs) is enforced in CI on
 every change, against both the built template and `createUiDefinition.json` —
 one test is skipped there ("URIs Should Be Properly Constructed", a false
 positive on the composed `appUrl`/`DATABASE_URL` values). Run it locally with
-`Test-AzTemplate -TemplatePath ./dist`.
+`Test-AzTemplate -TemplatePath ./dist` (and `./dist-update` for the update template).
 
 Also run before submission:
 the [createUiDefinition sandbox](https://portal.azure.com/#blade/Microsoft_Azure_CreateUIDef/SandboxBlade),

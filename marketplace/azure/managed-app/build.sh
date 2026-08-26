@@ -26,8 +26,8 @@ esac
   exit 2
 }
 
-rm -rf dist
-mkdir -p dist
+rm -rf dist dist-update
+mkdir -p dist dist-update
 
 echo "== az bicep build"
 az bicep build --file mainTemplate.bicep --outfile dist/mainTemplate.json
@@ -48,15 +48,19 @@ fi
 
 # The update template (README "Update EdSpace" button) carries the same pin:
 # the button must move customers to the release this package was cut for.
+# It is NOT part of the marketplace package, so it builds into its own
+# folder, named mainTemplate.json there because that is the only name ARM-TTK
+# tests as a main template — and a second template inside dist/ makes ARM-TTK's
+# inner-template extraction fail for the whole folder.
 echo "== az bicep build (update template)"
-az bicep build --file update.bicep --outfile dist/update.json
+az bicep build --file update.bicep --outfile dist-update/mainTemplate.json
 PATCHED_TEMPLATE=$(mktemp)
 jq --arg image "$EDSPACE_CONTAINER_IMAGE" \
   '.parameters.containerImage.defaultValue = $image' \
-  dist/update.json > "$PATCHED_TEMPLATE"
-mv "$PATCHED_TEMPLATE" dist/update.json
+  dist-update/mainTemplate.json > "$PATCHED_TEMPLATE"
+mv "$PATCHED_TEMPLATE" dist-update/mainTemplate.json
 PATCHED_TEMPLATE=""
-if grep -Eq '__[A-Z0-9_]+__' dist/update.json; then
+if grep -Eq '__[A-Z0-9_]+__' dist-update/mainTemplate.json; then
   echo "compiled update template still contains an unreplaced publisher token" >&2
   exit 2
 fi

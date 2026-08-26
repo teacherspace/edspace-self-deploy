@@ -135,6 +135,7 @@ Kubernetes: `>=1.27.0-0`
 | secrets.existingSecretKeys.tokenSigningSecret | string | `"token-signing-secret"` |  |
 | secrets.releaseCookie | string | `""` | Erlang distribution cookie; only used when clustering.enabled. |
 | secrets.secretKeyBase | string | `""` |  |
+| secrets.setupToken | string | `""` | First-run setup token (EDSPACE_SETUP_TOKEN), `<yyyyMMddHHmmss>.<random>`. Generated on first install when autoGenerate is on; the install notes print the /setup link. Set explicitly to mint a fresh one (valid 7 days from the embedded time, ignored once a platform admin exists). |
 | secrets.tokenSigningSecret | string | `""` |  |
 | seed.activeDeadlineSeconds | int | `900` |  |
 | seed.enabled | bool | `false` | Demo/seed data Job (post-install AND post-upgrade). Re-runs on every upgrade while enabled — disable again after seeding. |
