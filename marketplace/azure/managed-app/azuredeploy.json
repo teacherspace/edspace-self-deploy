@@ -4,8 +4,8 @@
   "metadata": {
     "_generator": {
       "name": "bicep",
-      "version": "0.44.1.10279",
-      "templateHash": "16407166434551395393"
+      "version": "0.46.1.21595",
+      "templateHash": "11200127099037330372"
     }
   },
   "parameters": {
@@ -583,6 +583,21 @@
       "type": "Microsoft.Storage/storageAccounts/blobServices",
       "apiVersion": "2025-01-01",
       "name": "[format('{0}/{1}', variables('storageAccountName'), 'default')]",
+      "properties": {
+        "isVersioningEnabled": false,
+        "deleteRetentionPolicy": {
+          "enabled": false
+        },
+        "containerDeleteRetentionPolicy": {
+          "enabled": false
+        },
+        "restorePolicy": {
+          "enabled": false
+        },
+        "changeFeed": {
+          "enabled": false
+        }
+      },
       "dependsOn": [
         "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]"
       ]
@@ -828,8 +843,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "11566454566458276618"
+              "version": "0.46.1.21595",
+              "templateHash": "9664303925916777311"
             }
           },
           "parameters": {
@@ -1077,8 +1092,8 @@
           "metadata": {
             "_generator": {
               "name": "bicep",
-              "version": "0.44.1.10279",
-              "templateHash": "16682100567345227745"
+              "version": "0.46.1.21595",
+              "templateHash": "9359456604270474578"
             }
           },
           "parameters": {
